@@ -42,17 +42,20 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Building Name",
+   "length": 100,
    "reqd": 1
   },
   {
    "fieldname": "owner_name",
    "fieldtype": "Data",
-   "label": "Owner Name"
+   "label": "Owner Name",
+   "length": 100
   },
   {
    "fieldname": "address",
    "fieldtype": "Small Text",
    "label": "Address",
+   "length": 255,
    "reqd": 1
   },
   {
@@ -76,12 +79,14 @@
    "label": "Counts"
   },
   {
+   "default": "0",
    "fieldname": "floors_count",
    "fieldtype": "Int",
    "label": "Floors Count",
    "read_only": 1
   },
   {
+   "default": "0",
    "fieldname": "units_count",
    "fieldtype": "Int",
    "label": "Units Count",

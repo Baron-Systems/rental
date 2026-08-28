@@ -62,18 +62,14 @@ class RentalFloor(frappe.model.document.Document):
 			)
 
 		if frappe.db.exists("DocType", "Lease Contract"):
-			contract_count = frappe.db.count(
-				"Lease Contract",
-				{"floor": self.name},
-			)
-			if not contract_count:
-				# Also check contracts via unit.floor (units linked to this floor)
-				unit_names = frappe.get_all("Rental Unit", {"floor": self.name}, pluck="name")
-				if unit_names:
-					contract_count = frappe.db.count(
-						"Lease Contract",
-						{"unit": ["in", unit_names]},
-					)
+			# Source: leaseContract.count where unit.floorId == id
+			unit_names = frappe.get_all("Rental Unit", {"floor": self.name}, pluck="name")
+			contract_count = 0
+			if unit_names:
+				contract_count = frappe.db.count(
+					"Lease Contract",
+					{"unit": ["in", unit_names]},
+				)
 			if contract_count:
 				frappe.throw(
 					frappe._("لا يمكن حذف طابق يحتوي على وحدات مؤجرة")

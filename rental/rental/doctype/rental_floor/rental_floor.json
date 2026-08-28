@@ -42,6 +42,7 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Floor Name",
+   "length": 50,
    "reqd": 1
   },
   {

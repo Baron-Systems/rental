@@ -410,28 +410,3 @@ class TestProperties(FrappeTestCase):
 		status = frappe.db.get_value("Rental Unit", unit, "status")
 		self.assertEqual(status, "empty")
 
-	def test_unit_status_unavailable_when_manually_set(self):
-		building = self._create_building(self.owner_a, self.account_a, "Status Unavail Building")
-		unit = self._create_unit(self.owner_a, building, "U-S2")
-
-		frappe.set_user("Administrator")
-		unit_doc = frappe.get_doc("Rental Unit", unit)
-		unit_doc.is_manually_unavailable = 1
-		unit_doc.save(ignore_permissions=True)
-
-		status = frappe.db.get_value("Rental Unit", unit, "status")
-		self.assertEqual(status, "unavailable")
-
-	def test_unit_status_back_to_empty_when_unchecked(self):
-		building = self._create_building(self.owner_a, self.account_a, "Status Back Building")
-		unit = self._create_unit(self.owner_a, building, "U-S3")
-
-		frappe.set_user("Administrator")
-		unit_doc = frappe.get_doc("Rental Unit", unit)
-		unit_doc.is_manually_unavailable = 1
-		unit_doc.save(ignore_permissions=True)
-		self.assertEqual(frappe.db.get_value("Rental Unit", unit, "status"), "unavailable")
-
-		unit_doc.is_manually_unavailable = 0
-		unit_doc.save(ignore_permissions=True)
-		self.assertEqual(frappe.db.get_value("Rental Unit", unit, "status"), "empty")

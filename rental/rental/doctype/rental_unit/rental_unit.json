@@ -17,6 +17,8 @@
   "bathrooms_count",
   "default_rent",
   "meter_section",
+  "electricity_meter_number",
+  "water_meter_number",
   "current_electricity_meter_reading",
   "current_water_meter_reading",
   "status_section",
@@ -62,12 +64,14 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Unit Number",
+   "length": 50,
    "reqd": 1
   },
   {
    "fieldname": "unit_type",
    "fieldtype": "Select",
    "label": "Unit Type",
+   "length": 30,
    "options": "\napartment\nshop\noffice\nwarehouse\nroom\ngarage\nindependent\nother",
    "reqd": 1
   },
@@ -127,12 +131,6 @@
    "fieldname": "status_section",
    "fieldtype": "Section Break",
    "label": "Status"
-  },
-  {
-   "default": "0",
-   "fieldname": "is_manually_unavailable",
-   "fieldtype": "Check",
-   "label": "Manually Unavailable"
   },
   {
    "default": "empty",

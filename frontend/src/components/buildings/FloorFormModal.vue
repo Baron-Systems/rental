@@ -4,9 +4,6 @@
       <FormField label="اسم الطابق" required>
         <input v-model="form.floor_name" type="text" required placeholder="اسم الطابق *" class="input-premium" />
       </FormField>
-      <FormField label="ترتيب العرض">
-        <input v-model.number="form.sort_order" type="number" dir="ltr" placeholder="ترتيب العرض" class="input-premium" />
-      </FormField>
     </form>
     <template #footer>
       <button class="btn-premium btn-outline" @click="$emit('close')">إلغاء</button>
@@ -27,12 +24,14 @@ import FormField from '@/components/ui/FormField.vue'
 
 const props = defineProps({
   buildingName: { type: String, required: true },
+  floorCount: { type: Number, default: 0 },
 })
 const emit = defineEmits(['close', 'saved'])
 
+// Source: page.tsx:341 — sortOrder auto-set to building.floors.length
 const form = ref({
   floor_name: '',
-  sort_order: 0,
+  sort_order: props.floorCount,
   building: props.buildingName,
 })
 const saving = ref(false)

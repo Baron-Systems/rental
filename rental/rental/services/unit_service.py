@@ -9,17 +9,12 @@ def derive_unit_status(unit_doc) -> str:
 	Ported from ``recalculateUnitStatus`` in ``src/services/contract-validation.ts``.
 
 	Algorithm:
-	0. Manually marked unavailable → unavailable (overrides everything)
 	1. Current active contract (start <= today <= end) → rented
 	2. Expired contract (not historical, not closed by renewal, latest end_date) → rented
 	3. Cancelled contract with cancelledAt >= startDate → rented (matches source: contract-validation.ts)
 	4. Upcoming active contract (start > today) → reserved
 	5. Default → empty
 	"""
-	# 0. Manual override
-	if unit_doc.get("is_manually_unavailable"):
-		return "unavailable"
-
 	if not frappe.db.exists("DocType", "Lease Contract"):
 		return "empty"
 

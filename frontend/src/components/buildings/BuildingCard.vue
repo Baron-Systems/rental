@@ -97,7 +97,7 @@ const props = defineProps({
 defineEmits(['view', 'toggle-active', 'delete'])
 
 const occupancyRate = computed(() => {
-  const total = (props.building.rented_units || 0) + (props.building.empty_units || 0) + (props.building.reserved_units || 0)
+  const total = props.building.units_count || 0
   if (total === 0) return 0
   return Math.round(((props.building.rented_units || 0) / total) * 100)
 })

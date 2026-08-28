@@ -48,15 +48,6 @@
       <FormField label="ملاحظات">
         <textarea v-model="form.notes" rows="2" placeholder="أي ملاحظات إضافية..." class="input-premium" :disabled="!editableFields.includes('notes')" :class="{ 'opacity-60': !editableFields.includes('notes') }"></textarea>
       </FormField>
-
-      <!-- Manual unavailable toggle -->
-      <div class="pt-4 border-t border-ivory-300/60">
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input v-model="form.is_manually_unavailable" type="checkbox" class="w-4 h-4 rounded text-gold-500 focus:ring-gold-400" />
-          <span class="text-sm font-medium text-navy-700">تعليم كغير متاحة</span>
-        </label>
-        <p class="text-xs text-navy-400 mt-1">عند تعليم هذا الخيار، تُصبح الوحدة غير متاحة لاختيارها في العقود الجديدة بغض النظر عن حالة العقود.</p>
-      </div>
     </form>
     <template #footer>
       <button class="btn-premium btn-outline" @click="$emit('close')">إلغاء</button>
@@ -97,7 +88,6 @@ const form = ref({
   current_electricity_meter_reading: props.unit?.current_electricity_meter_reading ?? '',
   current_water_meter_reading: props.unit?.current_water_meter_reading ?? '',
   notes: props.unit?.notes || '',
-  is_manually_unavailable: props.unit?.is_manually_unavailable ? 1 : 0,
 })
 const saving = ref(false)
 

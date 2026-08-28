@@ -59,7 +59,7 @@ const form = ref({ building: '', floor_name: '', sort_order: 0 })
 
 async function loadBuildings() {
   try {
-    const res = await callApi('rental.rental.api.property.get_buildings', { simple: 1, include_inactive: 1, limit: 100 })
+    const res = await callApi('rental.rental.api.property.get_buildings', { simple: 1, limit: 100 })
     buildings.value = res || []
   } catch { buildings.value = [] }
 }

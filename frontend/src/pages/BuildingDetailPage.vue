@@ -22,7 +22,7 @@
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
               </div>
               <h1 class="text-2xl font-bold text-navy-900">{{ building.building_name }}</h1>
-              <StatusBadge :status="building.is_active ? 'active' : 'inactive'" />
+              <StatusBadge v-if="!building.is_active" status="inactive" />
             </div>
             <p v-if="building.owner_name" class="text-sm text-navy-500 mb-0.5">المالك: {{ building.owner_name }}</p>
             <p v-if="building.address" class="text-sm text-navy-400 flex items-center gap-1.5">
@@ -274,7 +274,7 @@
               </div>
               <div class="text-center">
                 <p class="text-xs text-navy-400 mb-1">نشطة</p>
-                <p class="text-xl font-bold text-emerald-600 tabular-nums">{{ contracts.filter(c => c.status === 'active').length }}</p>
+                <p class="text-xl font-bold text-emerald-600 tabular-nums">{{ activeContractsCount }}</p>
               </div>
               <div class="text-center">
                 <p class="text-xs text-navy-400 mb-1">منتهية</p>
@@ -289,7 +289,7 @@
         </div>
 
         <!-- Modals -->
-        <FloorFormModal v-if="showFloorModal" :building-name="building.name" @close="closeFloorModal" @saved="handleFloorSaved" />
+        <FloorFormModal v-if="showFloorModal" :building-name="building.name" :floor-count="floors.length" @close="closeFloorModal" @saved="handleFloorSaved" />
         <UnitAddModal v-if="showUnitModal && !editingUnit" :building-name="building.name" :floors="floors" :existing-units="units" :preselected-floor="preselectedFloor" @close="closeUnitModal" @saved="handleUnitSaved" />
         <UnitEditModal v-if="showUnitModal && editingUnit" :unit="editingUnit" :floors="floors" @close="closeUnitModal" @saved="handleUnitSaved" />
         <UnitDetailsModal v-if="showUnitDetails" :unit="selectedUnit" :building-name="building.name" :floors="floors" @close="closeUnitDetails" @edit="editUnitFromDetails" @toggle-active="toggleUnitActive" @delete="deleteUnitFromDetails" />
@@ -318,6 +318,7 @@ import { callApi, formatMoney, extractError } from '@/composables/useApi'
 import { useSession } from '@/composables/useSession'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
+import { getContractPeriodStatus } from '@/utils/contractUtils'
 
 const router = useRouter()
 const route = useRoute()
@@ -400,16 +401,30 @@ const unitsByFloor = computed(() => {
 
 const unitsWithoutFloor = computed(() => unitsByFloor.value['__none'] || [])
 
-const today = new Date().toISOString().split('T')[0]
-const currentContracts = computed(() => contracts.value.filter(c =>
-  ['active', 'draft'].includes(c.status) && c.start_date <= today && c.end_date >= today
-))
-const upcomingContracts = computed(() => contracts.value.filter(c =>
-  ['active', 'draft'].includes(c.status) && c.start_date > today
-))
-const pastContracts = computed(() => contracts.value.filter(c =>
-  !['active', 'draft'].includes(c.status) || c.end_date < today
-))
+const today = new Date()
+today.setHours(0, 0, 0, 0)
+
+// Source: page.tsx:696-709 — uses getContractPeriodStatus for classification
+const currentContracts = computed(() => contracts.value.filter(c => {
+  const period = getContractPeriodStatus(c.start_date, c.end_date, today)
+  return ['active', 'draft'].includes(c.status) && period === 'current'
+}))
+const upcomingContracts = computed(() => contracts.value.filter(c => {
+  const period = getContractPeriodStatus(c.start_date, c.end_date, today)
+  return ['active', 'draft'].includes(c.status) && period === 'upcoming'
+}))
+const pastContracts = computed(() => contracts.value.filter(c => {
+  const period = getContractPeriodStatus(c.start_date, c.end_date, today)
+  return !['active', 'draft'].includes(c.status) || period === 'past'
+}))
+
+// Active contracts with current period (source: page.tsx:875-880)
+const activeContractsCount = computed(() =>
+  contracts.value.filter(c => {
+    if (c.status !== 'active') return false
+    return getContractPeriodStatus(c.start_date, c.end_date, today) === 'current'
+  }).length
+)
 
 function statusPercent(status) {
   if (activeUnitsCount.value === 0) return 0

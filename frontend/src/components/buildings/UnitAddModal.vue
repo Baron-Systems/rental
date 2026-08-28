@@ -97,6 +97,13 @@ const suggestedUnitNumber = computed(() => {
   return String(Math.max(...nums) + 1)
 })
 
+// Apply suggested unit number on mount (source: page.tsx:305-315, 490)
+onMounted(() => {
+  if (!form.value.unit_number) {
+    form.value.unit_number = suggestedUnitNumber.value
+  }
+})
+
 async function save() {
   saving.value = true
   try {

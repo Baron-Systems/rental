@@ -114,10 +114,12 @@ function toggleFloor(name) {
   else expanded.add(name)
 }
 
-// Auto-expand first floor
+// Expand all floors by default (source: page.tsx:272 — new Set(building.floors.map(f => f.id)))
 watch(() => props.floors, (floors) => {
   if (floors.length > 0 && expanded.size === 0) {
-    expanded.add(floors[0].name)
+    for (const f of floors) {
+      expanded.add(f.name)
+    }
   }
 }, { immediate: true })
 </script>

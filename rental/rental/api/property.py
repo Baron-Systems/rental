@@ -16,30 +16,28 @@ from rental.rental.utils.account import get_current_rental_account, is_system_ma
 
 
 @frappe.whitelist()
-def get_buildings(search=None, is_active=None, page=1, limit=0, simple=0, include_inactive=0):
+def get_buildings(page=1, limit=0, simple=0, include_inactive=0):
 	"""List buildings for the current account.
 
 	``simple=1`` returns only name/building_name (for dropdowns).
 	``include_inactive=1`` includes inactive buildings (otherwise filtered out).
+
+	Source: ``GET /api/buildings``.
 	"""
 	account = get_current_rental_account()
 	filters = {}
 	if account:
 		filters["rental_account"] = account
-	if search:
-		filters["building_name"] = ["like", f"%{search}%"]
-	if is_active is not None:
-		filters["is_active"] = is_active
-	elif not int(include_inactive):
+	if not int(include_inactive):
 		filters["is_active"] = 1
 
-	# Simple mode: just name + building_name
+	# Simple mode: just name + building_name (source: select { id, name } orderBy name asc)
 	if int(simple):
 		buildings = frappe.get_all(
 			"Rental Building",
 			filters=filters,
 			fields=["name", "building_name"],
-			order_by="creation desc",
+			order_by="building_name asc",
 		)
 		return buildings
 
@@ -59,14 +57,15 @@ def get_buildings(search=None, is_active=None, page=1, limit=0, simple=0, includ
 	)
 
 	# Enrich with floor and unit counts + balance + unit status counts
+	# Source: units filter { isActive: true } — only active units are counted
 	from rental.rental.services.balance_service import get_building_balance
 
 	for b in buildings:
 		b["floors_count"] = frappe.db.count("Rental Floor", {"building": b["name"]})
-		b["units_count"] = frappe.db.count("Rental Unit", {"building": b["name"]})
-		b["rented_units"] = frappe.db.count("Rental Unit", {"building": b["name"], "status": "rented"})
-		b["empty_units"] = frappe.db.count("Rental Unit", {"building": b["name"], "status": "empty"})
-		b["reserved_units"] = frappe.db.count("Rental Unit", {"building": b["name"], "status": "reserved"})
+		b["units_count"] = frappe.db.count("Rental Unit", {"building": b["name"], "is_active": 1})
+		b["rented_units"] = frappe.db.count("Rental Unit", {"building": b["name"], "is_active": 1, "status": "rented"})
+		b["empty_units"] = frappe.db.count("Rental Unit", {"building": b["name"], "is_active": 1, "status": "empty"})
+		b["reserved_units"] = frappe.db.count("Rental Unit", {"building": b["name"], "is_active": 1, "status": "reserved"})
 		balance = get_building_balance(b["name"])
 		b["total_dues"] = balance["totalDues"]
 		b["total_receipts"] = balance["totalReceipts"]
@@ -153,11 +152,10 @@ def get_building(name):
 		u["contracts"] = unit_contracts
 	result["units"] = units
 
-	# Add unit counts
+	# Add floors_count (source: Building model includes floorsCount field)
+	result["floors_count"] = len(floors)
+	# units_count from the building model (source: Building model includes unitsCount field)
 	result["units_count"] = len(units)
-	result["rented_units"] = frappe.db.count("Rental Unit", {"building": name, "status": "rented"})
-	result["empty_units"] = frappe.db.count("Rental Unit", {"building": name, "status": "empty"})
-	result["reserved_units"] = frappe.db.count("Rental Unit", {"building": name, "status": "reserved"})
 
 	# Add contracts (with contract_number, tenant, unit)
 	contracts = frappe.get_all(
@@ -227,7 +225,12 @@ def get_building(name):
 
 
 @frappe.whitelist()
-def create_building(building_name, owner_name=None, address=None, latitude=None, longitude=None, is_active=1):
+def create_building(building_name, owner_name=None, address=None, latitude=None, longitude=None,
+					floors_count=None, units_count=None, is_active=1):
+	"""Create a building.
+
+	Source: ``POST /api/buildings`` — passes floorsCount/unitsCount from schema (optional).
+	"""
 	account = get_current_rental_account()
 	doc = frappe.get_doc({
 		"doctype": "Rental Building",
@@ -237,6 +240,8 @@ def create_building(building_name, owner_name=None, address=None, latitude=None,
 		"address": address,
 		"latitude": latitude,
 		"longitude": longitude,
+		"floors_count": floors_count if floors_count is not None else 0,
+		"units_count": units_count if units_count is not None else 0,
 		"is_active": is_active,
 	})
 	doc.insert(ignore_permissions=is_system_manager())
@@ -332,7 +337,10 @@ def delete_building(name):
 
 @frappe.whitelist()
 def get_floors(building=None, page=1, limit=0):
-	"""List floors, optionally filtered by building."""
+	"""List floors, optionally filtered by building.
+
+	Source: ``GET /api/floors`` — includes building { name }, orderBy sortOrder asc.
+	"""
 	account = get_current_rental_account()
 	filters = {}
 	if account:
@@ -352,8 +360,9 @@ def get_floors(building=None, page=1, limit=0):
 		limit_page_length=int(limit) if int(limit) else None,
 	)
 
+	# Source: include: { building: { select: { name: true } } }
+	# Frappe adaptation: keep building as link ID + add building_name for display
 	for f in floors:
-		f["units_count"] = frappe.db.count("Rental Unit", {"floor": f["name"]})
 		if f.get("building"):
 			f["building_name"] = frappe.db.get_value("Rental Building", f["building"], "building_name")
 
@@ -372,17 +381,23 @@ def get_floors(building=None, page=1, limit=0):
 
 @frappe.whitelist()
 def get_floor(name):
-	"""Get a single floor with its units."""
+	"""Get a single floor with its units.
+
+	Source: ``GET /api/floors/[id]`` — includes building { name } and units (all fields).
+	"""
 	floor = frappe.get_doc("Rental Floor", name)
 	floor.check_permission("read")
 
 	result = floor.as_dict()
+	# Frappe adaptation: add building_name (source: building: { select: { name: true } })
+	if result.get("building"):
+		result["building_name"] = frappe.db.get_value("Rental Building", result["building"], "building_name")
 
+	# Source: units: { orderBy: { unitNumber: 'asc' } } — no select, returns all fields
 	units = frappe.get_all(
 		"Rental Unit",
 		filters={"floor": name},
-		fields=["name", "unit_number", "unit_type", "area", "rooms_count",
-				"bathrooms_count", "default_rent", "is_active", "status"],
+		fields=["*"],
 		order_by="unit_number asc",
 	)
 	result["units"] = units
@@ -425,15 +440,14 @@ def delete_floor(name):
 	if rented_units:
 		frappe.throw(frappe._("لا يمكن حذف طابق يحتوي على وحدات مؤجرة"))
 
-	# 2. Contracts on units in this floor
+	# 2. Contracts on units in this floor (source: leaseContract.count where unit.floorId == id)
 	if frappe.db.exists("DocType", "Lease Contract"):
-		contract_count = frappe.db.count("Lease Contract", {"floor": name})
-		if not contract_count:
-			unit_names = frappe.get_all("Rental Unit", {"floor": name}, pluck="name")
-			if unit_names:
-				contract_count = frappe.db.count(
-					"Lease Contract", {"unit": ["in", unit_names]}
-				)
+		unit_names = frappe.get_all("Rental Unit", {"floor": name}, pluck="name")
+		contract_count = 0
+		if unit_names:
+			contract_count = frappe.db.count(
+				"Lease Contract", {"unit": ["in", unit_names]}
+			)
 		if contract_count:
 			frappe.throw(frappe._("لا يمكن حذف طابق يحتوي على وحدات مؤجرة"))
 
@@ -462,12 +476,16 @@ def reorder_floors(building, floor_ids=None, floor_order=None):
 	of floor names in the desired order).
 	"""
 	raw = floor_ids if floor_ids is not None else floor_order
+	# Source: !Array.isArray(floorIds) || floorIds.length === 0
 	if raw is None:
 		frappe.throw(frappe._("قائمة الطوابق مطلوبة"))
 
 	if isinstance(raw, str):
 		import json
 		raw = json.loads(raw)
+
+	if not isinstance(raw, (list, tuple)) or len(raw) == 0:
+		frappe.throw(frappe._("قائمة الطوابق مطلوبة"))
 
 	for index, floor_name in enumerate(raw):
 		# Validate floor belongs to building
@@ -508,8 +526,8 @@ def move_unit(name=None, target_floor=None, unit=None):
 	unit_doc.check_permission("write")
 
 	# Block if unit has an active contract (status=active, within date range)
-	from datetime import date
-	today = date.today()
+	from rental.rental.utils.date_utils import to_calendar_day
+	today = to_calendar_day(frappe.utils.today())
 	active_contract = frappe.db.exists(
 		"Lease Contract",
 		{
@@ -549,12 +567,14 @@ def move_unit(name=None, target_floor=None, unit=None):
 
 
 @frappe.whitelist()
-def get_units(building=None, floor=None, status=None, unit_type=None, search=None,
-			  is_active=None, page=1, limit=0, available_only=0, simple=0, include_inactive=0):
+def get_units(building=None, floor=None, status=None, tenant=None,
+			  page=1, limit=0, simple=0, include_inactive=0):
 	"""List units with filters.
 
 	``simple=1`` returns only name/unit_number (for dropdowns).
 	``include_inactive=1`` includes inactive units (otherwise filtered out).
+
+	Source: ``GET /api/units``.
 	"""
 	account = get_current_rental_account()
 	filters = {}
@@ -566,18 +586,29 @@ def get_units(building=None, floor=None, status=None, unit_type=None, search=Non
 		filters["floor"] = floor
 	if status:
 		filters["status"] = status
-	if unit_type:
-		filters["unit_type"] = unit_type
-	if is_active is not None:
-		filters["is_active"] = is_active
-	elif not int(include_inactive):
+	if not int(include_inactive):
 		filters["is_active"] = 1
-	if search:
-		filters["unit_number"] = ["like", f"%{search}%"]
-	if int(available_only):
-		filters["status"] = "available"
+	# tenant filter: units with active contract for this tenant (source: units/route.ts:27-36)
+	if tenant:
+		from rental.rental.utils.date_utils import to_calendar_day
+		today = to_calendar_day(frappe.utils.today())
+		tenant_unit_names = frappe.get_all(
+			"Lease Contract",
+			filters={
+				"tenant": tenant,
+				"status": "active",
+				"start_date": ["<=", today],
+				"end_date": [">=", today],
+			},
+			pluck="unit",
+		)
+		if tenant_unit_names:
+			filters["name"] = ["in", tenant_unit_names]
+		else:
+			# No matching units for this tenant
+			return {"units": []}
 
-	# C15: simple mode returns only id and name (legacy units/route.ts:20-26).
+	# Simple mode: just name + unit_number (for dropdowns)
 	if int(simple):
 		units = frappe.get_all(
 			"Rental Unit",
@@ -587,13 +618,13 @@ def get_units(building=None, floor=None, status=None, unit_type=None, search=Non
 		)
 		return {"units": units}
 
+	# Source: units/route.ts:40-66 select fields
 	fields = [
 		"name", "unit_number", "building", "floor", "unit_type",
-		"area", "rooms_count", "bathrooms_count", "default_rent",
+		"area", "default_rent",
 		"electricity_meter_number", "water_meter_number",
 		"current_electricity_meter_reading", "current_water_meter_reading",
-		"notes", "is_active", "status",
-		"rental_account",
+		"is_active", "status",
 	]
 
 	start = (int(page) - 1) * int(limit) if int(limit) else 0
@@ -607,24 +638,33 @@ def get_units(building=None, floor=None, status=None, unit_type=None, search=Non
 		limit_page_length=int(limit) if int(limit) else None,
 	)
 
-	# Enrich
+	# Enrich — source: units/route.ts:38-68
+	# building: { select: { name: true } }, floor: { select: { name: true } }
+	# contracts: { where: active + date range, take: 1, include tenant fullName }
+	from rental.rental.utils.date_utils import to_calendar_day
+	today = to_calendar_day(frappe.utils.today())
+
 	for u in units:
 		if u.get("building"):
 			u["building_name"] = frappe.db.get_value("Rental Building", u["building"], "building_name")
 		if u.get("floor"):
 			u["floor_name"] = frappe.db.get_value("Rental Floor", u["floor"], "floor_name")
-		# Active contract info
-		active_contract = frappe.db.get_value(
+		# Current active contracts (filtered by date range, take 1)
+		active_contracts = frappe.get_all(
 			"Lease Contract",
-			{"unit": u["name"], "status": "active"},
-			["name", "tenant", "start_date", "end_date"],
-			as_dict=True,
+			filters={
+				"unit": u["name"],
+				"status": "active",
+				"start_date": ["<=", today],
+				"end_date": [">=", today],
+			},
+			fields=["name", "start_date", "end_date", "status", "tenant"],
+			order_by="start_date desc",
+			limit=1,
 		)
-		if active_contract:
-			u["active_contract"] = active_contract
-			u["tenant_name"] = frappe.db.get_value("Rental Tenant", active_contract.tenant, "full_name")
-		else:
-			u["active_contract"] = None
+		for c in active_contracts:
+			c["tenant"] = {"full_name": frappe.db.get_value("Rental Tenant", c["tenant"], "full_name") if c["tenant"] else None}
+		u["contracts"] = active_contracts
 
 	total = frappe.db.count("Rental Unit", filters)
 
@@ -641,7 +681,7 @@ def get_units(building=None, floor=None, status=None, unit_type=None, search=Non
 
 @frappe.whitelist()
 def get_unit(name):
-	"""Get a single unit with contracts, active contract, and permissions.
+	"""Get a single unit with contracts and permissions.
 
 	Mirrors ``GET /api/units/[id]`` in the source app:
 	- contracts: full history with tenant {id, fullName}
@@ -650,6 +690,7 @@ def get_unit(name):
 	unit = frappe.get_doc("Rental Unit", name)
 	unit.check_permission("read")
 
+	# Source: units/[id]/route.ts:13-40 select fields
 	result = {
 		"name": unit.name,
 		"unit_number": unit.unit_number,
@@ -669,20 +710,19 @@ def get_unit(name):
 		"is_active": unit.is_active,
 	}
 
-	# Building object
+	# Building object — source: building: { select: { id: true, name: true } }
 	if result.get("building"):
 		result["building"] = {
 			"id": unit.building,
 			"name": frappe.db.get_value("Rental Building", unit.building, "building_name"),
 		}
-	# Floor object
+	# Floor object — source: floor: { select: { name: true } } (no id)
 	if result.get("floor"):
 		result["floor"] = {
-			"id": unit.floor,
 			"name": frappe.db.get_value("Rental Floor", unit.floor, "floor_name"),
 		}
 
-	# All contracts for this unit (with tenant)
+	# All contracts for this unit (with tenant) — source: contracts include tenant {id, fullName}
 	contracts = frappe.get_all(
 		"Lease Contract",
 		filters={"unit": name},
@@ -696,19 +736,6 @@ def get_unit(name):
 		} if c.tenant else None
 	result["contracts"] = contracts
 
-	# Active contract (current or upcoming)
-	active_contract = frappe.db.get_value(
-		"Lease Contract",
-		{"unit": name, "status": ["in", ["active", "draft"]]},
-		["name", "tenant", "start_date", "end_date", "rent_amount", "status"],
-		as_dict=True,
-	)
-	if active_contract:
-		active_contract["tenant_name"] = frappe.db.get_value(
-			"Rental Tenant", active_contract.tenant, "full_name"
-		)
-	result["active_contract"] = active_contract
-
 	# Add permissions (matches old app: GET /api/units/[id] embeds permissions)
 	from rental.rental.services.unit_permissions_service import get_unit_action_permissions
 	result["permissions"] = get_unit_action_permissions(name)
@@ -719,8 +746,11 @@ def get_unit(name):
 @frappe.whitelist()
 def create_unit(building, unit_number, floor=None, unit_type=None, area=None, rooms_count=None,
 				bathrooms_count=None, default_rent=None, notes=None, is_active=1,
-				electricity_meter_number=None, water_meter_number=None,
 				current_electricity_meter_reading=None, current_water_meter_reading=None):
+	"""Create a unit.
+
+	Source: ``POST /api/units`` — unitSchema fields only (no meter numbers).
+	"""
 	account = frappe.db.get_value("Rental Building", building, "rental_account")
 	if not account:
 		account = get_current_rental_account()
@@ -735,8 +765,6 @@ def create_unit(building, unit_number, floor=None, unit_type=None, area=None, ro
 		"rooms_count": rooms_count,
 		"bathrooms_count": bathrooms_count,
 		"default_rent": default_rent,
-		"electricity_meter_number": electricity_meter_number,
-		"water_meter_number": water_meter_number,
 		"current_electricity_meter_reading": current_electricity_meter_reading,
 		"current_water_meter_reading": current_water_meter_reading,
 		"notes": notes,
@@ -748,59 +776,91 @@ def create_unit(building, unit_number, floor=None, unit_type=None, area=None, ro
 
 @frappe.whitelist()
 def update_unit(name, **kwargs):
-	"""Update a unit. Enforces editableFields rules (matches old app)."""
-	from rental.rental.services.unit_permissions_service import get_unit_action_permissions, get_editable_fields
+	"""Update a unit. Enforces editableFields rules.
+
+	Source: ``PUT /api/units/[id]``.
+	Order of checks (must match original):
+	  1. Get existing unit (404 if not found — handled by get_doc)
+	  2. Get permissions
+	  3. Check canEdit (403 if false — always true in practice)
+	  4. unitNumber changed && !editableFields → 409
+	  5. floor changed && !editableFields → 409
+	  6. building changed && !editableFields → 409
+	  7. currentElectricityMeterReading present && !editableFields → 409
+	  8. currentWaterMeterReading present && !editableFields → 409
+	  9. Build updateData and save
+
+	Updatable fields (source: units/[id]/route.ts:103-114):
+	  unitNumber, unitType, floorId, buildingId, area, roomsCount,
+	  bathroomsCount, defaultRent, currentElectricityMeterReading,
+	  currentWaterMeterReading, notes
+	"""
+	from rental.rental.services.unit_permissions_service import get_unit_action_permissions
 
 	doc = frappe.get_doc("Rental Unit", name)
+	doc.check_permission("write")
+
 	permissions = get_unit_action_permissions(name)
-	editable_fields = get_editable_fields(name)
+	editable_fields = permissions.get("editable_fields", [])
 
-	# Always-editable descriptive fields
-	always_editable = ["unit_type", "area", "rooms_count", "bathrooms_count", "notes"]
+	# 3. canEdit check (always true in the original, but kept for parity)
+	if not permissions.get("can_edit"):
+		reason = permissions.get("reasons", {}).get("edit") or "لا يمكن تعديل الوحدة"
+		frappe.throw(frappe._(reason), frappe.PermissionError)
 
-	# Identity fields (only editable when no contracts)
-	identity_fields = ["unit_number", "building", "floor"]
+	# Map incoming kwargs (snake_case) to the original field checks
+	# Original editableFields uses camelCase; Python uses snake_case
+	# editable_fields from the service are already snake_case
+	existing_unit_number = doc.unit_number
+	existing_floor = doc.floor
+	existing_building = doc.building
 
-	# Meter reading fields (blocked when active metered contract exists)
-	meter_reading_fields = ["current_electricity_meter_reading", "current_water_meter_reading"]
+	unit_number_changed = kwargs.get("unit_number") is not None and kwargs.get("unit_number") != existing_unit_number
+	floor_changed = "floor" in kwargs and kwargs.get("floor") != existing_floor
+	building_changed = kwargs.get("building") is not None and kwargs.get("building") != existing_building
 
-	# Meter number fields (always editable — stored but not shown in UI per spec)
-	meter_number_fields = ["electricity_meter_number", "water_meter_number"]
+	# 4. unitNumber check
+	if unit_number_changed and "unit_number" not in editable_fields:
+		frappe.throw(frappe._("لا يمكن تغيير رقم الوحدة لأنها تحتوي على سجل عقود"), frappe.PermissionError)
+	# 5. floor check
+	if floor_changed and "floor" not in editable_fields:
+		frappe.throw(frappe._("لا يمكن تغيير الطابق لأن الوحدة تحتوي على سجل عقود"), frappe.PermissionError)
+	# 6. building check
+	if building_changed and "building" not in editable_fields:
+		frappe.throw(frappe._("لا يمكن تغيير العقار لأن الوحدة تحتوي على سجل عقود"), frappe.PermissionError)
+	# 7. electricity meter reading check
+	if kwargs.get("current_electricity_meter_reading") is not None and "current_electricity_meter_reading" not in editable_fields:
+		frappe.throw(frappe._("لا يمكن تعديل قراءة عداد الكهرباء لوجود عقد مترى نشط على الوحدة"), frappe.PermissionError)
+	# 8. water meter reading check
+	if kwargs.get("current_water_meter_reading") is not None and "current_water_meter_reading" not in editable_fields:
+		frappe.throw(frappe._("لا يمكن تعديل قراءة عداد المياه لوجود عقد مترى نشط على الوحدة"), frappe.PermissionError)
 
-	for field in kwargs:
-		if kwargs[field] is None:
-			continue
-		val = kwargs[field]
-		if field == "floor" and (val == "" or val == "null"):
-			val = None
-
-		if field in always_editable or field in meter_number_fields:
-			doc.set(field, val)
-		elif field in identity_fields:
-			if field not in editable_fields:
-				if field == "unit_number":
-					msg = frappe._("لا يمكن تغيير رقم الوحدة لأنها تحتوي على سجل عقود")
-				elif field == "floor":
-					msg = frappe._("لا يمكن تغيير الطابق لأن الوحدة تحتوي على سجل عقود")
-				elif field == "building":
-					msg = frappe._("لا يمكن تغيير العقار لأن الوحدة تحتوي على سجل عقود")
-				else:
-					msg = frappe._("لا يمكن تغيير '{0}' — الوحدة لها سجل عقود.").format(field)
-				frappe.throw(msg, frappe.PermissionError)
-			doc.set(field, val)
-		elif field in meter_reading_fields:
-			if field not in editable_fields:
-				if field == "current_electricity_meter_reading":
-					msg = frappe._("لا يمكن تعديل قراءة عداد الكهرباء لوجود عقد مترى نشط على الوحدة")
-				elif field == "current_water_meter_reading":
-					msg = frappe._("لا يمكن تعديل قراءة عداد المياه لوجود عقد مترى نشط على الوحدة")
-				else:
-					msg = frappe._("لا يمكن تغيير قراءة العداد — الوحدة لها عقد نشط بعداد.")
-				frappe.throw(msg, frappe.PermissionError)
-			doc.set(field, val)
-		elif field in ["is_active", "is_manually_unavailable"]:
-			doc.set(field, val)
-		# status is NOT editable via API (derived from contracts)
+	# 9. Build updateData and save — only the fields in the original updateData
+	if kwargs.get("unit_number") is not None:
+		doc.unit_number = kwargs["unit_number"]
+	if kwargs.get("unit_type") is not None:
+		doc.unit_type = kwargs["unit_type"]
+	if "floor" in kwargs:
+		floor_val = kwargs["floor"]
+		if floor_val == "" or floor_val == "null":
+			floor_val = None
+		doc.floor = floor_val
+	if kwargs.get("building") is not None:
+		doc.building = kwargs["building"]
+	if kwargs.get("area") is not None:
+		doc.area = float(kwargs["area"]) if kwargs["area"] else None
+	if kwargs.get("rooms_count") is not None:
+		doc.rooms_count = kwargs["rooms_count"]
+	if kwargs.get("bathrooms_count") is not None:
+		doc.bathrooms_count = kwargs["bathrooms_count"]
+	if kwargs.get("default_rent") is not None:
+		doc.default_rent = float(kwargs["default_rent"]) if kwargs["default_rent"] else None
+	if kwargs.get("current_electricity_meter_reading") is not None:
+		doc.current_electricity_meter_reading = kwargs["current_electricity_meter_reading"]
+	if kwargs.get("current_water_meter_reading") is not None:
+		doc.current_water_meter_reading = kwargs["current_water_meter_reading"]
+	if kwargs.get("notes") is not None:
+		doc.notes = kwargs["notes"]
 
 	doc.save(ignore_permissions=is_system_manager())
 	return doc.name
@@ -823,15 +883,16 @@ def toggle_unit_active(name, is_active):
 	permissions = get_unit_action_permissions(name)
 	target = int(is_active)
 
-	if target == 0:
-		# Disable
-		if not permissions.get("can_disable"):
-			reason = permissions.get("reasons", {}).get("disable") or "لا يمكن تعطيل الوحدة"
-			frappe.throw(frappe._(reason), frappe.PermissionError)
-	else:
+	# Source: units/[id]/route.ts:146-158 — reactivate check first, then disable
+	if target == 1:
 		# Reactivate
 		if not permissions.get("can_reactivate"):
 			reason = permissions.get("reasons", {}).get("reactivate") or "لا يمكن تفعيل الوحدة"
+			frappe.throw(frappe._(reason), frappe.PermissionError)
+	else:
+		# Disable
+		if not permissions.get("can_disable"):
+			reason = permissions.get("reasons", {}).get("disable") or "لا يمكن تعطيل الوحدة"
 			frappe.throw(frappe._(reason), frappe.PermissionError)
 
 	doc.is_active = target
