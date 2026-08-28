@@ -245,19 +245,19 @@ async function loadContract() {
         commitmentTiming: c.commitment_timing || c.commitmentTiming || 'start',
         contractCharges: (c.contract_charges || c.contractCharges || []).map((charge) => ({
           id: charge.name || charge.id,
-          dueTypeId: charge.due_type || charge.dueTypeId,
-          dueTypeName: charge.due_type_name || charge.dueType?.name || '',
-          dueTypeCode: charge.due_type_code || charge.dueType?.code || null,
+          due_type: charge.due_type || charge.dueTypeId,
+          due_type_name: charge.due_type_name || charge.dueTypeName || charge.dueType?.name || '',
+          due_type_code: charge.due_type_code || charge.dueTypeCode || charge.dueType?.code || null,
           responsibility: charge.responsibility,
-          paymentBy: charge.payment_by || charge.paymentBy || '',
-          calculationMethod: charge.calculation_method || charge.calculationMethod || '',
+          payment_by: charge.payment_by || charge.paymentBy || '',
+          calculation_method: charge.calculation_method || charge.calculationMethod || '',
           amount: charge.amount != null ? String(charge.amount) : undefined,
           frequency: charge.frequency || undefined,
-          firstDueDate: charge.first_due_date ? new Date(charge.first_due_date).toISOString().split('T')[0] : undefined,
-          commitmentTiming: charge.commitment_timing || charge.commitmentTiming || undefined,
-          lastPeriodHandling: charge.last_period_handling || charge.lastPeriodHandling || undefined,
-          lastPeriodAdjustmentAmount: charge.last_period_adjustment_amount != null ? String(charge.last_period_adjustment_amount) : undefined,
-          openingMeterReading: charge.opening_meter_reading || charge.openingMeterReading || undefined,
+          first_due_date: charge.first_due_date ? new Date(charge.first_due_date).toISOString().split('T')[0] : (charge.firstDueDate || undefined),
+          commitment_timing: charge.commitment_timing || charge.commitmentTiming || undefined,
+          last_period_handling: charge.last_period_handling || charge.lastPeriodHandling || undefined,
+          last_period_adjustment_amount: charge.last_period_adjustment_amount != null ? String(charge.last_period_adjustment_amount) : (charge.lastPeriodAdjustmentAmount != null ? String(charge.lastPeriodAdjustmentAmount) : undefined),
+          opening_meter_reading: charge.opening_meter_reading || charge.openingMeterReading || undefined,
         })),
         terms: c.terms || '',
         witnesses: c.witnesses || '',
@@ -298,25 +298,26 @@ function buildDefaultCharges(dueTypes, unit) {
   // Source: ContractChargesSection.tsx:150-163 buildDefaultCharges
   // Only electricity & water, responsibility='landlord', no paymentBy/calculationMethod
   // Rent is excluded (handled by due generation)
+  // Uses snake_case keys to match ContractChargesSection.vue / ContractChargeCard.vue
   if (!dueTypes || dueTypes.length === 0) return []
   const defaults = []
   for (const code of ['electricity', 'water']) {
     const dt = dueTypes.find((d) => (d.code || d.due_type_code) === code)
     if (!dt) continue
     defaults.push({
-      dueTypeId: dt.name || dt.id,
-      dueTypeName: dt.due_type_name || dt.name,
-      dueTypeCode: code,
+      due_type: dt.name || dt.id,
+      due_type_name: dt.due_type_name || dt.name,
+      due_type_code: code,
       responsibility: 'landlord',
-      paymentBy: '',
-      calculationMethod: '',
+      payment_by: '',
+      calculation_method: '',
       amount: undefined,
       frequency: undefined,
-      firstDueDate: undefined,
-      commitmentTiming: undefined,
-      lastPeriodHandling: undefined,
-      lastPeriodAdjustmentAmount: undefined,
-      openingMeterReading: undefined,
+      first_due_date: undefined,
+      commitment_timing: undefined,
+      last_period_handling: undefined,
+      last_period_adjustment_amount: undefined,
+      opening_meter_reading: undefined,
     })
   }
   return defaults
@@ -380,7 +381,7 @@ async function saveNew(asDraft) {
     return
   }
 
-  const invalidCharge = form.value.contractCharges?.find((c) => !c.dueTypeId)
+  const invalidCharge = form.value.contractCharges?.find((c) => !(c.due_type || c.dueTypeId))
   if (invalidCharge) {
     errors.value = { general: 'بيانات خدمات العقد غير مكتملة (نوع الالتزام مطلوب لكل خدمة).' }
     return
@@ -421,7 +422,7 @@ async function saveEdit() {
     errors.value = { general: 'لم يتم تحميل أنواع الالتزام النظامية (كهرباء / مياه). يرجى الانتظار أو تحديث الصفحة.' }
     return
   }
-  const invalidCharge = form.value.contractCharges?.find((c) => !c.dueTypeId)
+  const invalidCharge = form.value.contractCharges?.find((c) => !(c.due_type || c.dueTypeId))
   if (invalidCharge) {
     errors.value = { general: 'بيانات خدمات العقد غير مكتملة (نوع الالتزام مطلوب لكل خدمة).' }
     return

@@ -273,6 +273,20 @@ def get_contract(name):
 
 	result = contract.as_dict()
 
+	# Enrich contract charges with due_type_name and due_type_code.
+	# Source: old program route.ts:33 — `contractCharges: { include: { dueType: true } }`
+	# embeds the full DueType object in each charge. Frappe's as_dict() only
+	# returns the link field (due_type = ID), so we add the display fields here.
+	for charge in result.get("contract_charges", []):
+		if charge.get("due_type"):
+			dt = frappe.db.get_value(
+				"Rental Due Type", charge["due_type"],
+				["due_type_name", "due_type_code"], as_dict=True,
+			)
+			if dt:
+				charge["due_type_name"] = dt.due_type_name
+				charge["due_type_code"] = dt.due_type_code
+
 	# Add lessor data — strip logo (source: route.ts:60-62)
 	from rental.rental.doctype.rental_settings.rental_settings import get_lessor_data, parse_lessor_snapshot
 	lessor = get_lessor_data(contract.rental_account)
@@ -470,7 +484,7 @@ def create_contract(**kwargs):
 		account = kwargs.get("rental_account")
 	if not account:
 		# Infer from the selected building (each building belongs to one account)
-		building = kwargs.get("building")
+		building = kwargs.get("building") or kwargs.get("building_id")
 		if building:
 			account = frappe.db.get_value("Rental Building", building, "rental_account")
 	if not account:
@@ -480,13 +494,21 @@ def create_contract(**kwargs):
 	if not account:
 		frappe.throw(frappe._("Could not determine Rental Account. Please complete setup first."))
 
+	# Map frontend field names to doctype fields.
+	# The old program's API accepts tenantId/buildingId/unitId; after the
+	# frontend's camelCase→snake_case conversion these arrive as tenant_id/
+	# building_id/unit_id. The Frappe doctype fields are tenant/building/unit.
+	tenant = kwargs.get("tenant") or kwargs.get("tenant_id")
+	building = kwargs.get("building") or kwargs.get("building_id")
+	unit = kwargs.get("unit") or kwargs.get("unit_id")
+
 	# Build contract doc
 	contract_data = {
 		"doctype": "Lease Contract",
 		"rental_account": account,
-		"tenant": kwargs.get("tenant"),
-		"building": kwargs.get("building"),
-		"unit": kwargs.get("unit"),
+		"tenant": tenant,
+		"building": building,
+		"unit": unit,
 		"start_date": kwargs.get("start_date"),
 		"end_date": kwargs.get("end_date"),
 		"rent_amount": kwargs.get("rent_amount"),
@@ -500,13 +522,28 @@ def create_contract(**kwargs):
 		"status": "draft",
 	}
 
-	# Add charges if provided
+	# Add charges if provided — map frontend field names to doctype fields.
+	# Frontend sends due_type_id (snake_case of dueTypeId); doctype field is due_type.
+	# Strip non-doctype keys (due_type_name, due_type_code) that the frontend
+	# includes for display purposes. Source: old program saveContractCharges
+	# maps dueTypeId → Prisma's dueTypeId field; here we map to Frappe's due_type.
 	charges = kwargs.get("contract_charges")
 	if charges:
 		if isinstance(charges, str):
 			import json
 			charges = json.loads(charges)
-		contract_data["contract_charges"] = charges
+		mapped_charges = []
+		for c in charges:
+			mapped = {}
+			for k, v in c.items():
+				if k == "due_type_id":
+					mapped["due_type"] = v
+				elif k in ("due_type_name", "due_type_code"):
+					continue  # display-only fields, not on doctype
+				else:
+					mapped[k] = v
+			mapped_charges.append(mapped)
+		contract_data["contract_charges"] = mapped_charges
 
 	contract = frappe.get_doc(contract_data)
 	contract.insert(ignore_permissions=is_system_manager())
@@ -537,6 +574,12 @@ def update_contract(name, **kwargs):
 	if contract.status != "draft":
 		frappe.throw(frappe._("لا يمكن تعديل العقد بعد الاعتماد"))
 
+	# Map frontend field names to doctype fields (same as create_contract).
+	# Frontend sends tenant_id/building_id/unit_id; doctype fields are tenant/building/unit.
+	for old_key, new_key in [("tenant_id", "tenant"), ("building_id", "building"), ("unit_id", "unit")]:
+		if old_key in kwargs and new_key not in kwargs:
+			kwargs[new_key] = kwargs[old_key]
+
 	# Renewal drafts cannot change fixed fields (tenant/building/unit/dates)
 	# Source: route.ts:128-137 — reject with 409, do NOT silently delete
 	if contract.renewed_from_contract:
@@ -565,13 +608,25 @@ def update_contract(name, **kwargs):
 	if unit_or_building_changed:
 		validate_contract_draft_unit(contract)
 
-	# Update charges if provided
+	# Update charges if provided — map frontend field names to doctype fields.
+	# Frontend sends due_type_id; doctype field is due_type.
 	charges = kwargs.get("contract_charges")
 	if charges:
 		if isinstance(charges, str):
 			import json
 			charges = json.loads(charges)
-		save_contract_charges(contract, charges, contract.rental_account)
+		mapped_charges = []
+		for c in charges:
+			mapped = {}
+			for k, v in c.items():
+				if k == "due_type_id":
+					mapped["due_type"] = v
+				elif k in ("due_type_name", "due_type_code"):
+					continue
+				else:
+					mapped[k] = v
+			mapped_charges.append(mapped)
+		save_contract_charges(contract, mapped_charges, contract.rental_account)
 
 	contract.save(ignore_permissions=is_system_manager())
 	# Source: route.ts:196 returns { contract: updated }
@@ -670,6 +725,15 @@ def approve_contract(name, generate_dues=0):
 			"lessor_snapshot": snapshot,
 		}, update_modified=False)
 
+		# Sync the in-memory contract object so downstream calls
+		# (generate_fixed_periodic_dues, freeze_metered_opening_readings, etc.)
+		# see the updated status. The old program fetches the contract fresh
+		# from DB inside each service function; the Frappe port passes the
+		# in-memory doc, so we must keep it in sync with the DB write above.
+		contract.status = new_status
+		contract.is_historical = 1 if is_past else 0
+		contract.lessor_snapshot = snapshot
+
 		# If renewal, close previous contract
 		if contract.renewed_from_contract:
 			close_previous_contract_by_renewal(
@@ -726,6 +790,10 @@ def approve_contract(name, generate_dues=0):
 			"is_historical": 0,
 			"lessor_snapshot": None,
 		}, update_modified=False)
+		# Sync in-memory object to match the revert
+		contract.status = "draft"
+		contract.is_historical = 0
+		contract.lessor_snapshot = None
 		raise
 
 	# Source: route.ts:111 returns { contract: updated } (no status field)
@@ -922,7 +990,7 @@ def unarchive_contract_api(name):
 
 
 @frappe.whitelist()
-def get_contract_balance_api(name):
+def get_contract_balance(name):
 	"""Get contract balance.
 
 	Source: ``GET /api/contracts/[id]/balance``.
@@ -931,8 +999,8 @@ def get_contract_balance_api(name):
 	# Source: route.ts:14-21 — contract existence check
 	if not frappe.db.exists("Lease Contract", name):
 		frappe.throw(frappe._("العقد غير موجود"))
-	from rental.rental.services.balance_service import get_contract_balance
-	return get_contract_balance(name)
+	from rental.rental.services.balance_service import get_contract_balance as _get_contract_balance
+	return _get_contract_balance(name)
 
 
 # ---------------------------------------------------------------------------

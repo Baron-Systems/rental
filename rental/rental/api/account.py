@@ -74,15 +74,42 @@ def get_current_account() -> dict | None:
 
 
 def _get_safe_settings(account_name: str) -> dict | None:
+	"""Return lessor data in the LessorData shape expected by the frontend.
+
+	Source: old program ``getLessorData()`` (settings.ts:34-48) — returns
+	``{ type, name, identityOrRegistrationNumber, phone, address,
+	representativeName, representativeId, representativeTitle, currency, logo }``.
+	The frontend's ``ContractDocument.vue`` uses this object as ``lessorData``
+	via ``session.state.account.settings``.
+	"""
 	settings_name = frappe.db.get_value(
 		"Rental Settings", {"rental_account": account_name}, "name"
 	)
 	if not settings_name:
 		return None
 
-	return frappe.db.get_value(
+	s = frappe.db.get_value(
 		"Rental Settings",
 		settings_name,
-		["landlord_type", "landlord_name", "landlord_phone", "logo", "currency", "currency_locked"],
+		["landlord_type", "landlord_name", "landlord_id", "landlord_phone",
+		 "landlord_address", "logo", "currency", "currency_locked",
+		 "landlord_representative_name", "landlord_representative_id",
+		 "landlord_representative_title"],
 		as_dict=True,
 	)
+	if not s:
+		return None
+
+	return {
+		"type": "company" if s.landlord_type == "company" else "person",
+		"name": s.landlord_name or "",
+		"identityOrRegistrationNumber": str(s.landlord_id or ""),
+		"phone": s.landlord_phone or "",
+		"address": s.landlord_address or "",
+		"representativeName": s.landlord_representative_name or "",
+		"representativeId": str(s.landlord_representative_id or ""),
+		"representativeTitle": s.landlord_representative_title or "",
+		"currency": s.currency or "ILS",
+		"logo": s.logo or "",
+		"currency_locked": s.currency_locked,
+	}
