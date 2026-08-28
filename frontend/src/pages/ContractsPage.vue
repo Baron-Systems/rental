@@ -623,7 +623,7 @@ function openCancelDialog(c) {
   showCancelDialog.value = true
 }
 
-async function handleCancelContract({ cancellationDate, reason }) {
+async function handleCancelContract(cancellationDate, reason) {
   if (!cancelDialogContract.value) return
   try {
     await callApi('rental.rental.api.contract.cancel_contract', {

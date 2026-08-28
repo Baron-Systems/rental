@@ -541,7 +541,7 @@ async function doApprove(generateDues) {
   } catch (e) { toast.error(extractError(e)) }
 }
 
-async function handleCancelContract({ cancellationDate, reason }) {
+async function handleCancelContract(cancellationDate, reason) {
   if (!cancellationDate) { toast.error('يرجى تحديد تاريخ الإلغاء'); return }
   cancelling.value = true
   try {
