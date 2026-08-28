@@ -143,7 +143,6 @@ def get_building_balance(building_name: str) -> dict:
 	total_dues = get_effective_due_total({"building": building_name})
 	total_receipts = get_approved_receipt_total({"building": building_name})
 	return {
-		"building": building_name,
 		"totalDues": total_dues,
 		"totalReceipts": total_receipts,
 		"balance": round_money(total_dues - total_receipts),
@@ -159,6 +158,7 @@ def get_tenant_balance_stats(where: dict | None = None) -> dict:
 	"""Return stats: {total, debt, credit, zero} for a tenant filter.
 
 	Source: ``getTenantBalanceStats``.
+	Computes bulk dues, receipts and active waivers without per-tenant round trips.
 	"""
 	where = where or {}
 	tenants = frappe.get_all("Rental Tenant", filters=where, pluck="name")
@@ -168,11 +168,61 @@ def get_tenant_balance_stats(where: dict | None = None) -> dict:
 	with_credit = 0
 	zero = 0
 
+	if not tenants:
+		return {
+			"total": total,
+			"debt": with_debt,
+			"credit": with_credit,
+			"zero": zero,
+		}
+
+	today = _today()
+	tenant_names = tuple(tenants)
+
+	dues_by_tenant = frappe.db.sql(
+		"""
+		SELECT tenant, SUM(amount) as total
+		FROM `tabRental Due`
+		WHERE docstatus = 1 AND due_date <= %s AND tenant IN %s
+		GROUP BY tenant
+		""",
+		(today, tenant_names),
+		as_dict=True,
+	)
+	dues_map = {d["tenant"]: float(d["total"] or 0) for d in dues_by_tenant}
+
+	receipts_by_tenant = frappe.db.sql(
+		"""
+		SELECT tenant, SUM(amount) as total
+		FROM `tabRental Receipt`
+		WHERE docstatus = 1 AND tenant IN %s
+		GROUP BY tenant
+		""",
+		(tenant_names,),
+		as_dict=True,
+	)
+	receipts_map = {r["tenant"]: float(r["total"] or 0) for r in receipts_by_tenant}
+
+	waivers_by_tenant = frappe.db.sql(
+		"""
+		SELECT d.tenant, SUM(w.amount) as total
+		FROM `tabRental Due Waiver` w
+		JOIN `tabRental Due` d ON w.due = d.name
+		WHERE w.status = 'active' AND d.docstatus = 1 AND d.due_date <= %s AND d.tenant IN %s
+		GROUP BY d.tenant
+		""",
+		(today, tenant_names),
+		as_dict=True,
+	)
+	waivers_map = {w["tenant"]: float(w["total"] or 0) for w in waivers_by_tenant}
+
 	for t in tenants:
-		bal = get_tenant_balance(t)["balance"]
-		if bal > 0:
+		total_dues = dues_map.get(t, 0) - waivers_map.get(t, 0)
+		total_receipts = receipts_map.get(t, 0)
+		balance = total_dues - total_receipts
+		if balance > 0:
 			with_debt += 1
-		elif bal < 0:
+		elif balance < 0:
 			with_credit += 1
 		else:
 			zero += 1

@@ -42,8 +42,19 @@ def can_archive_contract(contract_name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def archive_contract(contract_name: str) -> None:
-	"""Archive a contract."""
+def archive_contract(contract_name: str):
+	"""Archive a contract.
+
+	Source: ``archiveContract`` (archive.service.ts:25-38).
+	Order of checks (must match original):
+	  1. Contract exists → 'العقد غير موجود'
+	  2. Archive eligibility (canArchiveContract)
+	  3. Update is_archived + archived_at
+	Returns the updated contract document.
+	"""
+	if not frappe.db.exists("Lease Contract", contract_name):
+		frappe.throw(frappe._("العقد غير موجود"))
+
 	result = can_archive_contract(contract_name)
 	if not result["eligible"]:
 		frappe.throw(result["reason"] or frappe._("لا يمكن أرشفة العقد"))
@@ -51,7 +62,9 @@ def archive_contract(contract_name: str) -> None:
 	frappe.db.set_value("Lease Contract", contract_name, {
 		"is_archived": 1,
 		"archived_at": frappe.utils.now(),
-	}, update_modified=False)
+	})
+
+	return frappe.get_doc("Lease Contract", contract_name)
 
 
 # ---------------------------------------------------------------------------
@@ -59,8 +72,19 @@ def archive_contract(contract_name: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def unarchive_contract(contract_name: str) -> None:
-	"""Reverse the archive flag."""
+def unarchive_contract(contract_name: str):
+	"""Reverse the archive flag.
+
+	Source: ``unarchiveContract`` (archive.service.ts:40-51).
+	Order of checks (must match original):
+	  1. Contract exists → 'العقد غير موجود'
+	  2. is_archived → 'العقد غير مؤرشف'
+	  3. Update is_archived + archived_at
+	Returns the updated contract document.
+	"""
+	if not frappe.db.exists("Lease Contract", contract_name):
+		frappe.throw(frappe._("العقد غير موجود"))
+
 	contract = frappe.get_doc("Lease Contract", contract_name)
 	if not contract.is_archived:
 		frappe.throw(frappe._("العقد غير مؤرشف"))
@@ -68,4 +92,6 @@ def unarchive_contract(contract_name: str) -> None:
 	frappe.db.set_value("Lease Contract", contract_name, {
 		"is_archived": 0,
 		"archived_at": None,
-	}, update_modified=False)
+	})
+
+	return frappe.get_doc("Lease Contract", contract_name)

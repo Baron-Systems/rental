@@ -27,9 +27,24 @@ def get_unit_action_permissions(unit_name: str) -> dict:
 		as_dict=True,
 	)
 	if not unit:
-		return {}
+		return {
+			"can_edit": False,
+			"editable_fields": [],
+			"can_disable": False,
+			"can_delete": False,
+			"can_reactivate": False,
+			"can_create_contract": False,
+			"reasons": {
+				"edit": "الوحدة غير موجودة",
+				"disable": "الوحدة غير موجودة",
+				"delete": "الوحدة غير موجودة",
+				"reactivate": "الوحدة غير موجودة",
+				"create_contract": "الوحدة غير موجودة",
+			},
+		}
 
-	building_active = True
+	# building?.isActive ?? false  →  default False when building is null
+	building_active = False
 	if unit.building:
 		building_active = bool(frappe.db.get_value("Rental Building", unit.building, "is_active"))
 
@@ -55,9 +70,7 @@ def get_unit_action_permissions(unit_name: str) -> dict:
 	can_delete = not has_any_history
 
 	# can_disable: unit active and no current/upcoming/expired-not-closed/cancelled-after-start contract
-	can_disable = False
-	if unit.is_active:
-		can_disable = not has_occupancy
+	can_disable = unit.is_active and not has_occupancy
 
 	# can_reactivate: unit inactive and building active
 	can_reactivate = (not unit.is_active) and building_active
@@ -68,14 +81,8 @@ def get_unit_action_permissions(unit_name: str) -> dict:
 	# editable_fields
 	editable_fields = _get_editable_fields(unit_name, contracts_count)
 
-	# Build reasons (Arabic)
-	reasons = {
-		"edit": None,
-		"disable": None,
-		"delete": None,
-		"reactivate": None,
-		"create_contract": None,
-	}
+	# Build reasons (Arabic) — starts empty, keys added only when condition fails
+	reasons: dict = {}
 
 	if not can_delete:
 		reasons["delete"] = "لا يمكن حذف وحدة تحتوي على سجلات استخدام (عقود، إخلاء، مستحقات، أو تحصيلات)"
@@ -106,10 +113,6 @@ def get_unit_action_permissions(unit_name: str) -> dict:
 		"can_delete": can_delete,
 		"can_create_contract": can_create_contract,
 		"reasons": reasons,
-		"contracts_count": contracts_count,
-		"evictions_count": evictions_count,
-		"dues_count": dues_count,
-		"receipts_count": receipts_count,
 	}
 
 
@@ -135,13 +138,16 @@ def _has_occupying_or_upcoming_contract(unit_name: str) -> bool:
 	}):
 		return True
 
-	# Cancelled after start
+	# Cancelled after start — only the most recent cancelled contract (source: findFirst orderBy cancelledAt desc)
 	cancelled = frappe.get_all(
 		"Lease Contract",
 		filters={"unit": unit_name, "status": "cancelled", "cancelled_at": ["is", "set"]},
 		fields=["cancelled_at", "start_date"],
+		order_by="cancelled_at desc",
+		limit=1,
 	)
-	for c in cancelled:
+	if cancelled:
+		c = cancelled[0]
 		if to_calendar_day(c.cancelled_at) >= to_calendar_day(c.start_date):
 			return True
 

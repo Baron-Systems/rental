@@ -81,7 +81,7 @@ def build_statement_lines(dues: list, receipts: list, waivers: list, due_type_na
 			"debit": float(d["amount"]),
 			"credit": 0,
 			"description": description,
-			"reference": d.get("due_number") or "",
+			"reference": d.get("reference_number") or d.get("due_number") or "",
 			"contract": d.get("contract"),
 			"contractNumber": _contract_number(d.get("contract")),
 			"building": _building_name(d.get("building")),
@@ -117,7 +117,7 @@ def build_statement_lines(dues: list, receipts: list, waivers: list, due_type_na
 		else:
 			type_name = f"إعفاء — {due_type_label}" if due_type_label else "إعفاء"
 			waiver_reason = w.get("reason") or ""
-			description = f"إعفاء - {waiver_reason}" if waiver_reason else "إعفاء"
+			description = f"إعفاء - {waiver_reason}"
 		entries.append({
 			"type": "waiver",
 			"id": w["name"],
@@ -159,7 +159,7 @@ def build_statement_lines(dues: list, receipts: list, waivers: list, due_type_na
 def get_tenant_statement(
 	tenant_name: str,
 	filters: dict | None = None,
-	page: int = 1,
+	page: int | None = None,
 	print_mode: bool = False,
 ) -> dict:
 	"""Full statement merging dues, waivers, and receipts.
@@ -276,17 +276,20 @@ def get_tenant_statement(
 
 	# ---- Pagination ----
 	total_entries = len(entries)
-	if not print_mode:
-		start = (page - 1) * STATEMENT_PAGE_SIZE
+	requested_page = 1 if page is None else max(page, 1)
+	if not print_mode and page is not None:
+		start = (requested_page - 1) * STATEMENT_PAGE_SIZE
 		end = start + STATEMENT_PAGE_SIZE
 		entries = entries[start:end]
 
-	pagination = {
-		"page": page,
-		"pageSize": STATEMENT_PAGE_SIZE,
-		"total": total_entries,
-		"totalPages": (total_entries + STATEMENT_PAGE_SIZE - 1) // STATEMENT_PAGE_SIZE,
-	}
+	pagination = None
+	if page is not None or print_mode:
+		pagination = {
+			"page": 1 if print_mode else requested_page,
+			"pageSize": STATEMENT_PAGE_SIZE,
+			"total": total_entries,
+			"totalPages": (total_entries + STATEMENT_PAGE_SIZE - 1) // STATEMENT_PAGE_SIZE,
+		}
 
 	return {
 		"tenant": tenant_name,

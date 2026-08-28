@@ -302,8 +302,9 @@ def create_due(**kwargs):
 
 		if charge.calculation_method == "metered":
 			# Metered due
-			if not can_create_meter_due(contract_name, due_type_name):
-				frappe.throw(frappe._("لا يمكن إنشاء التزام مترية قبل بدء العقد"))
+			meter_check = can_create_meter_due(contract_name, due_type_name)
+			if not meter_check.get("ok"):
+				frappe.throw(meter_check.get("error") or frappe._("لا يمكن إنشاء التزام مترية قبل بدء العقد"))
 			due_data["previous_meter_reading"] = get_previous_meter_reading(
 				contract_name, contract.unit, due_type_name
 			)
@@ -464,7 +465,7 @@ def cancel_due_api(name, reason):
 	due = frappe.get_doc("Rental Due", name)
 	due.check_permission("cancel")
 
-	cancel_due(name, reason)
+	cancel_due(name, reason, frappe.session.user)
 	return {"success": True}
 
 

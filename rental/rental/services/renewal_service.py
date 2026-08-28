@@ -17,7 +17,7 @@ from rental.rental.services.contract_validation import can_renew_contract
 # ---------------------------------------------------------------------------
 
 
-def can_create_renewal_for(previous_contract_name: str, exclude: str | None = None) -> dict:
+def can_create_renewal_for(previous_contract_name: str) -> dict:
 	"""Check if a renewal can be created for *previous_contract_name*.
 
 	Source: ``canCreateRenewalFor`` (renewal.service.ts:49-66).
@@ -33,14 +33,11 @@ def can_create_renewal_for(previous_contract_name: str, exclude: str | None = No
 		return {"ok": False, "reason": frappe._("العقد السابق غير موجود")}
 
 	# Check for existing non-cancelled/non-evicted renewal
-	renewal_filters = {
+	# Source: hasNonCancelledRenewal (renewal.service.ts:29-31)
+	if frappe.db.exists("Lease Contract", {
 		"renewed_from_contract": previous_contract_name,
 		"status": ["not in", ["cancelled", "evicted"]],
-	}
-	if exclude:
-		renewal_filters["name"] = ["!=", exclude]
-
-	if frappe.db.exists("Lease Contract", renewal_filters):
+	}):
 		return {"ok": False, "reason": frappe._("يوجد تجديد مرتبط غير ملغى لهذا العقد")}
 
 	if not can_renew_contract(previous):
@@ -77,16 +74,19 @@ def close_previous_contract_by_renewal(
 	if not previous:
 		return
 
+	# If the previous is already closed, do not touch it.
+	# Source: renewal.service.ts:88 — checked BEFORE date checks.
+	if previous.closed_by_renewal_at:
+		return
+
+	# Only close when the previous has actually ended and the renewal has started.
 	prev_end = to_calendar_day(previous.end_date)
 	renewal_start = to_calendar_day(renewal_contract.get("start_date"))
 
-	# Only close if previous has ended and renewal has started
 	if prev_end >= today:
 		return
 	if renewal_start > today:
 		return
-	if previous.closed_by_renewal_at:
-		return  # Already closed
 
 	# Set closedByRenewalAt
 	frappe.db.set_value(
@@ -107,25 +107,39 @@ def close_previous_contract_by_renewal(
 # ---------------------------------------------------------------------------
 
 
-def close_expired_contracts_by_renewal() -> int:
+def close_expired_contracts_by_renewal(as_of=None) -> list[dict]:
 	"""Close expired contracts whose approved renewal has now started.
 
-	Source: ``closeExpiredContractsByRenewal``.
-	"""
-	today = to_calendar_day(frappe.utils.today())
+	Source: ``closeExpiredContractsByRenewal`` (renewal.service.ts:112-144).
+	Returns a list of ``{"name": ..., "unit": ...}`` for each closed contract,
+	matching the original's ``{ id, unitId }[]`` return type.
 
-	# Find expired contracts with no closedByRenewalAt that have a started renewal
+	The original does NOT re-check ``prev_end < today`` here — the expired
+	status filter already guarantees it. It directly updates closedByRenewalAt
+	and captures metered openings without delegating to
+	closePreviousContractByRenewal.
+	"""
+	if as_of is None:
+		today = to_calendar_day(frappe.utils.today())
+	else:
+		today = to_calendar_day(as_of)
+
+	# Find expired contracts (not historical, not closed by renewal).
+	# Source: renewal.service.ts:120-127 — isHistorical: false, closedByRenewalAt: null
 	expired_contracts = frappe.get_all(
 		"Lease Contract",
 		filters={
 			"status": "expired",
+			"is_historical": 0,
 			"closed_by_renewal_at": ["is", "not set"],
 		},
-		fields=["name", "end_date"],
+		fields=["name", "unit"],
 	)
 
-	count = 0
+	closed: list[dict] = []
 	for c in expired_contracts:
+		# Find started approved renewal (getStartedRenewal equivalent).
+		# Source: renewal.service.ts:132 — getStartedRenewal(contract, today)
 		renewal = frappe.get_all(
 			"Lease Contract",
 			filters={
@@ -138,12 +152,22 @@ def close_expired_contracts_by_renewal() -> int:
 		)
 		if renewal:
 			r = renewal[0]
-			prev_end = to_calendar_day(c.end_date)
-			if prev_end < today:
-				close_previous_contract_by_renewal(c.name, r, r.get("rental_account"))
-				count += 1
+			# Directly update closedByRenewalAt — no prev_end re-check.
+			# Source: renewal.service.ts:134-137
+			frappe.db.set_value(
+				"Lease Contract", c.name,
+				"closed_by_renewal_at", frappe.utils.now(),
+				update_modified=False,
+			)
+			# Capture metered opening readings for the started renewal.
+			# Source: renewal.service.ts:138
+			if r.get("name"):
+				new_contract_doc = frappe.get_doc("Lease Contract", r["name"])
+				capture_metered_openings_from_unit(new_contract_doc, r.get("rental_account"))
+				new_contract_doc.save(ignore_permissions=True)
+			closed.append({"name": c.name, "unit": c.unit})
 
-	return count
+	return closed
 
 
 # ---------------------------------------------------------------------------
@@ -157,13 +181,27 @@ def is_approved_renewal(contract_name: str) -> bool:
 	return status not in ("draft", "cancelled", "evicted")
 
 
-def is_started_renewal(contract_name: str) -> bool:
-	"""Check if renewal has started (start_date <= today)."""
-	today = to_calendar_day(frappe.utils.today())
+def is_started_renewal(contract_name: str, as_of=None) -> bool:
+	"""Check if renewal is approved and has started (start_date <= as_of).
+
+	Source: ``isStartedRenewal`` (renewal.service.ts:16-23).
+	Order of checks (must match original):
+	  1. isApprovedRenewal → false if not approved
+	  2. start_date <= as_of (calendar day comparison)
+	"""
+	if as_of is None:
+		as_of = to_calendar_day(frappe.utils.today())
+	else:
+		as_of = to_calendar_day(as_of)
+
+	status = frappe.db.get_value("Lease Contract", contract_name, "status")
+	if not is_approved_renewal_status(status):
+		return False
+
 	start_date = frappe.db.get_value("Lease Contract", contract_name, "start_date")
 	if not start_date:
 		return False
-	return to_calendar_day(start_date) <= today
+	return to_calendar_day(start_date) <= as_of
 
 
 def has_non_cancelled_renewal(previous_contract_name: str) -> bool:

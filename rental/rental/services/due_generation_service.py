@@ -103,7 +103,7 @@ def get_rent_due_type() -> str:
 	ensure_system_due_types()
 	name = frappe.db.get_value("Rental Due Type", {"due_type_code": "rent"}, "name")
 	if not name:
-		frappe.throw(frappe._("System 'rent' due type not found."))
+		frappe.throw(frappe._("Rent due type not found"))
 	return name
 
 
@@ -112,17 +112,28 @@ def get_rent_due_type() -> str:
 # ---------------------------------------------------------------------------
 
 
-def generate_contract_dues(contract_doc, account: str, generate: bool = True) -> int:
+def generate_contract_dues(contract_doc, account: str, generate: bool = True) -> list[str]:
 	"""Create rent Due rows for the contract.
 
 	Uses firstDueDate or startDate, paymentFrequency, commitmentTiming.
 	Status approved (docstatus=1), sourceType='auto_contract', calculationMethod='fixed_periodic'.
 	Throws if any auto_contract dues already exist.
 
-	Returns the number of dues created.
+	Returns the list of created due names.
 	"""
 	if not generate:
-		return 0
+		return []
+
+	# Check contract exists (read from DB to avoid stale doc object)
+	# Source: generateContractDues (due-generation.service.ts:16)
+	if not frappe.db.exists("Lease Contract", contract_doc.name):
+		frappe.throw(frappe._("Contract not found"))
+
+	# Check contract status (read from DB to avoid stale doc object)
+	# Source: generateContractDues (due-generation.service.ts:17)
+	status = frappe.db.get_value("Lease Contract", contract_doc.name, "status")
+	if status != "active" and status != "expired":
+		frappe.throw(frappe._("Contract must be active or expired"))
 
 	# Check for existing auto_contract dues
 	existing = frappe.db.exists(
@@ -133,7 +144,7 @@ def generate_contract_dues(contract_doc, account: str, generate: bool = True) ->
 		},
 	)
 	if existing:
-		frappe.throw(frappe._("Auto-contract dues already exist for this contract."))
+		frappe.throw(frappe._("Dues already generated for this contract"))
 
 	rent_due_type = get_rent_due_type()
 
@@ -146,9 +157,9 @@ def generate_contract_dues(contract_doc, account: str, generate: bool = True) ->
 		first_due_date=contract_doc.first_due_date,
 	)
 
-	created = 0
+	created: list[str] = []
 	for item in schedule:
-		_create_auto_due(
+		due_name = _create_auto_due(
 			contract_doc=contract_doc,
 			due_type=rent_due_type,
 			account=account,
@@ -158,9 +169,9 @@ def generate_contract_dues(contract_doc, account: str, generate: bool = True) ->
 			period_label=item["period_label"],
 			amount=item["amount"],
 			calculation_method="fixed_periodic",
-			description=f"إيجار - {item['period_label']}",
+			description=f"إيجار {item['period_label']}",
 		)
-		created += 1
+		created.append(due_name)
 
 	return created
 
@@ -197,8 +208,11 @@ def _create_auto_due(
 	amount,
 	calculation_method,
 	description,
-):
-	"""Create a single auto_contract due (submitted/approved)."""
+) -> str:
+	"""Create a single auto_contract due (submitted/approved).
+
+	Returns the name of the created due.
+	"""
 	from rental.rental.doctype.rental_settings.rental_settings import generate_due_number
 
 	due_number = generate_due_number(account)
@@ -228,33 +242,40 @@ def _create_auto_due(
 	# Submit immediately
 	due.submit()
 
+	return due.name
+
 
 # ---------------------------------------------------------------------------
 # Regenerate future dues  (source: regenerateFutureDues)
 # ---------------------------------------------------------------------------
 
 
-def regenerate_future_dues(contract_name: str, new_rent: float, from_date=None) -> int:
+def regenerate_future_dues(contract_name: str, new_rent: float, from_date) -> list[str]:
 	"""Update amount and description of future auto_contract dues from from_date.
 
 	Source: ``regenerateFutureDues`` (due-generation.service.ts:104-139).
 	Updates ALL auto_contract dues (not just rent) with transactionDate >= fromDate.
 	Appends " (تعديل قيمة الإيجار)" to the existing description.
-	Returns the number of dues updated.
+	Returns the list of updated due names.
 	"""
+	# Check contract exists (source: regenerateFutureDues line 110-113)
+	if not frappe.db.exists("Lease Contract", contract_name):
+		frappe.throw(frappe._("Contract not found"))
+
 	filters = {
 		"contract": contract_name,
 		"source_type": "auto_contract",
 		"docstatus": 1,
-	}
-
-	if from_date:
 		# A21: legacy uses transaction_date (not due_date).
-		filters["transaction_date"] = [">=", to_calendar_day(from_date)]
+		"transaction_date": [">=", to_calendar_day(from_date)],
+	}
 
 	future_dues = frappe.get_all("Rental Due", filters=filters, fields=["name", "description"])
 
-	count = 0
+	if not future_dues:
+		return []
+
+	updated: list[str] = []
 	for d in future_dues:
 		# A21: append to existing description (legacy line 137).
 		existing_desc = d.description or ""
@@ -263,9 +284,9 @@ def regenerate_future_dues(contract_name: str, new_rent: float, from_date=None) 
 			"amount": round_money(new_rent),
 			"description": new_desc,
 		}, update_modified=False)
-		count += 1
+		updated.append(d.name)
 
-	return count
+	return updated
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +294,7 @@ def regenerate_future_dues(contract_name: str, new_rent: float, from_date=None) 
 # ---------------------------------------------------------------------------
 
 
-def cancel_future_dues(contract_name: str, from_date, reason: str, cancelled_by: str = None) -> int:
+def cancel_future_dues(contract_name: str, from_date, reason: str, cancelled_by: str) -> int:
 	"""Set future auto_contract dues to cancelled.
 
 	Returns the number of dues cancelled.
@@ -295,12 +316,13 @@ def cancel_future_dues(contract_name: str, from_date, reason: str, cancelled_by:
 	count = 0
 	for d in future_dues:
 		due = frappe.get_doc("Rental Due", d.name)
-		if due.docstatus == 1:
-			due.cancel()
-			frappe.db.set_value("Rental Due", d.name, {
-				"cancellation_reason": reason,
-				"cancelled_by": cancelled_by,
-			}, update_modified=False)
-			count += 1
+		# Set cancellation_reason BEFORE cancel() so on_cancel handler passes.
+		# on_cancel also sets cancelled_by = frappe.session.user and cancelled_at = now().
+		due.cancellation_reason = reason
+		due.cancel()
+		# Override cancelled_by with the passed parameter (source: cancelFutureDues line 157)
+		if cancelled_by != frappe.session.user:
+			frappe.db.set_value("Rental Due", d.name, "cancelled_by", cancelled_by, update_modified=False)
+		count += 1
 
 	return count
