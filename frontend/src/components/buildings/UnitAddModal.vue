@@ -76,7 +76,7 @@ const emit = defineEmits(['close', 'saved'])
 
 const form = ref({
   unit_number: '',
-  unit_type: '',
+  unit_type: 'apartment',
   floor: props.preselectedFloor || '',
   area: null,
   rooms_count: null,

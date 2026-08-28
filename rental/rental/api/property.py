@@ -240,9 +240,9 @@ def create_building(building_name, owner_name=None, address=None, latitude=None,
 		"address": address,
 		"latitude": latitude,
 		"longitude": longitude,
-		"floors_count": floors_count if floors_count is not None else 0,
-		"units_count": units_count if units_count is not None else 0,
-		"is_active": is_active,
+		"floors_count": int(floors_count) if floors_count is not None else 0,
+		"units_count": int(units_count) if units_count is not None else 0,
+		"is_active": int(is_active),
 	})
 	doc.insert(ignore_permissions=is_system_manager())
 	return doc.name
@@ -414,7 +414,7 @@ def create_floor(building, floor_name, sort_order=0):
 		"rental_account": account,
 		"building": building,
 		"floor_name": floor_name,
-		"sort_order": sort_order,
+		"sort_order": int(sort_order) if sort_order is not None else 0,
 	})
 	doc.insert(ignore_permissions=is_system_manager())
 	return doc.name
@@ -761,14 +761,14 @@ def create_unit(building, unit_number, floor=None, unit_type=None, area=None, ro
 		"floor": floor or None,
 		"unit_number": unit_number,
 		"unit_type": unit_type,
-		"area": area,
-		"rooms_count": rooms_count,
-		"bathrooms_count": bathrooms_count,
-		"default_rent": default_rent,
+		"area": float(area) if area else None,
+		"rooms_count": int(rooms_count) if rooms_count is not None else None,
+		"bathrooms_count": int(bathrooms_count) if bathrooms_count is not None else None,
+		"default_rent": float(default_rent) if default_rent else None,
 		"current_electricity_meter_reading": current_electricity_meter_reading,
 		"current_water_meter_reading": current_water_meter_reading,
 		"notes": notes,
-		"is_active": is_active,
+		"is_active": int(is_active),
 	})
 	doc.insert(ignore_permissions=is_system_manager())
 	return doc.name

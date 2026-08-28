@@ -189,7 +189,7 @@ onMounted(async () => {
     })
     permissions.value = res?.message || res || {}
   } catch {
-    permissions.value = { canEdit: true, canDelete: false, canDisable: false, canReactivate: false }
+    permissions.value = { can_edit: true, can_delete: false, can_disable: false, can_reactivate: false }
   } finally {
     loading.value = false
   }

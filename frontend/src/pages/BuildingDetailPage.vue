@@ -174,8 +174,8 @@
                   <TableCell><router-link :to="{ name: 'ContractDetail', params: { id: c.name } }" class="font-semibold text-navy-800 hover:text-gold-600">{{ c.contract_number || c.name }}</router-link></TableCell>
                   <TableCell>{{ c.tenant_name || (c.tenant && c.tenant.full_name) || '—' }}</TableCell>
                   <TableCell>{{ (c.unit && c.unit.unit_number) || '—' }}</TableCell>
-                  <TableCell>{{ c.start_date }}</TableCell>
-                  <TableCell>{{ c.end_date }}</TableCell>
+                  <TableCell>{{ formatDate(c.start_date) }}</TableCell>
+                  <TableCell>{{ formatDate(c.end_date) }}</TableCell>
                   <TableCell><StatusBadge :status="c.status" /></TableCell>
                 </TableRow>
               </DataTable>
@@ -190,8 +190,8 @@
                   <TableCell><router-link :to="{ name: 'ContractDetail', params: { id: c.name } }" class="font-semibold text-navy-800 hover:text-gold-600">{{ c.contract_number || c.name }}</router-link></TableCell>
                   <TableCell>{{ c.tenant_name || (c.tenant && c.tenant.full_name) || '—' }}</TableCell>
                   <TableCell>{{ (c.unit && c.unit.unit_number) || '—' }}</TableCell>
-                  <TableCell>{{ c.start_date }}</TableCell>
-                  <TableCell>{{ c.end_date }}</TableCell>
+                  <TableCell>{{ formatDate(c.start_date) }}</TableCell>
+                  <TableCell>{{ formatDate(c.end_date) }}</TableCell>
                   <TableCell><StatusBadge :status="c.status === 'active' ? 'upcoming' : c.status" /></TableCell>
                 </TableRow>
               </DataTable>
@@ -443,6 +443,16 @@ const unitTypeLabels = {
   room: 'غرفة', garage: 'كراج', independent: 'عقار مستقل', other: 'أخرى',
 }
 function unitTypeLabel(type) { return unitTypeLabels[type] || type || '' }
+
+function formatDate(dateStr) {
+  if (!dateStr) return '—'
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return dateStr
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  return `${day}/${m}/${y}`
+}
 
 async function fetchBuilding() {
   loading.value = true
