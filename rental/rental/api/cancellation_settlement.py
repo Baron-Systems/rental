@@ -44,8 +44,35 @@ def get_settlement(contract=None, name=None, settlement_id=None):
 	# Get unresolved dues
 	unresolved = _get_unresolved_dues(contract_name, settlement_name)
 
-	# Totals (source: route.ts:55-65) — match original camelCase field names
+	# Enrich each settlement item with the full `due` object (source: route.ts:22
+	# — Prisma include: { due: { include: { dueType: true, waivers: true } } }).
+	# Frappe only stores the due Link (string); we fetch the related fields so the
+	# frontend (ported from Prisma) can access item.due.due_type_name, etc.
 	items = settlement.get("settlement_items", []) or settlement.get("items", [])
+	for it in items:
+		due_name = it.get("due")
+		if due_name and isinstance(due_name, str):
+			due = frappe.db.get_value(
+				"Rental Due", due_name,
+				["name", "due_number", "amount", "period_start", "period_end",
+				 "due_date", "due_type", "source_type", "docstatus"],
+				as_dict=True,
+			) or {}
+			due_type_name = None
+			if due.get("due_type"):
+				due_type_name = frappe.db.get_value("Rental Due Type", due["due_type"], "due_type_name")
+			due["due_type_name"] = due_type_name
+			# Fetch active waivers for this due (source: Prisma include waivers)
+			waivers = frappe.get_all(
+				"Rental Due Waiver",
+				filters={"due": due_name, "status": "active"},
+				fields=["name", "amount", "reason", "status", "source_type"],
+			)
+			due["waivers"] = waivers
+			it["due"] = due
+	# Expose `items` as an alias for `settlement_items` so the frontend (ported
+	# from Prisma where the relation is named `items`) can use `settlement.items`.
+	settlement["items"] = items
 	totals = {
 		"originalTotal": sum(float(it.get("original_amount") or 0) for it in items),
 		"grossSettledTotal": sum(float(it.get("gross_settled_amount") or 0) for it in items),

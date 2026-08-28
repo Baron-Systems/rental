@@ -621,7 +621,11 @@ def _delete_settlement_item(settlement_name: str, due_id: str) -> None:
 
 
 def _get_unresolved_dues(contract_name: str, settlement_name: str) -> list:
-	"""Get auto-contract dues without period that are not in the settlement."""
+	"""Get auto-contract dues without period that are not in the settlement.
+
+	Source: route.ts:31-53 — returns ``{ dueId, dueNumber, dueType, dueDate,
+	blockingReason }`` for each unresolved due.
+	"""
 	# Get due names already in settlement
 	settled_due_names = frappe.get_all(
 		"Cancellation Settlement Item",
@@ -638,4 +642,26 @@ def _get_unresolved_dues(contract_name: str, settlement_name: str) -> list:
 	if settled_due_names:
 		filters["name"] = ["not in", settled_due_names]
 
-	return frappe.get_all("Rental Due", filters=filters, fields=["name"])
+	dues = frappe.get_all(
+		"Rental Due", filters=filters,
+		fields=["name", "due_number", "due_date", "due_type"],
+		order_by="due_date asc",
+	)
+
+	result = []
+	for d in dues:
+		due_type_name = None
+		if d.get("due_type"):
+			due_type_name = frappe.db.get_value("Rental Due Type", d["due_type"], "due_type_name")
+		result.append({
+			"dueId": d.name,
+			"due_id": d.name,
+			"dueNumber": d.due_number,
+			"due_number": d.due_number,
+			"dueType": due_type_name,
+			"due_type_name": due_type_name,
+			"dueDate": d.due_date,
+			"due_date": d.due_date,
+			"blockingReason": "Missing periodStart or periodEnd",
+		})
+	return result

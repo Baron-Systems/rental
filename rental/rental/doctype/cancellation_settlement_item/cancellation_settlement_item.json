@@ -55,7 +55,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Decision",
-   "options": "\nkeep_full\nprorated\nmanual_settlement\nfull_waiver"
+   "options": "pending\nkeep_full\nprorated\nmanual_settlement\nfull_waiver"
   },
   {
    "fieldname": "gross_settled_amount",
