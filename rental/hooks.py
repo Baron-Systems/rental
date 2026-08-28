@@ -8,18 +8,13 @@ app_license = "mit"
 # Apps
 # ------------------
 
-# required_apps = []
+# Note: add_to_apps_screen and role_home_page conflict with www/frontend.html.
+# The Vue SPA is accessible directly at /frontend.
 
-# Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "rental",
-# 		"logo": "/assets/rental/logo.png",
-# 		"title": "Rental",
-# 		"route": "/rental",
-# 		"has_permission": "rental.api.permission.has_app_permission"
-# 	}
-# ]
+# Website Route Rules
+# -------------------
+# Not used — causes 500 conflict with www/frontend.html.
+# Vue uses hash-based routing (/frontend#/login) instead.
 
 # Includes in <head>
 # ------------------
@@ -85,8 +80,8 @@ app_license = "mit"
 # Installation
 # ------------
 
-# before_install = "rental.install.before_install"
-# after_install = "rental.install.after_install"
+before_install = "rental.rental.install.before_install"
+after_install = "rental.rental.install.after_install"
 
 # Uninstallation
 # ------------
@@ -124,15 +119,33 @@ app_license = "mit"
 
 # Permissions
 # -----------
-# Permissions evaluated in scripted ways
+# Generic permission utilities for all account-scoped DocTypes
 
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
+ACCOUNT_SCOPED_DOCTYPES = [
+	"Rental Settings",
+	"Rental Due Type",
+	"Rental Building",
+	"Rental Floor",
+	"Rental Unit",
+	"Rental Tenant",
+	"Lease Contract",
+	"Rental Due",
+	"Rental Due Waiver",
+	"Rental Receipt",
+	"Rental Eviction",
+	"Contract Cancellation Settlement",
+	"Cancellation Settlement Item",
+]
+
+permission_query_conditions = {
+	dt: "rental.rental.utils.permissions.get_permission_query_conditions"
+	for dt in ACCOUNT_SCOPED_DOCTYPES
+}
+
+has_permission = {
+	dt: "rental.rental.utils.permissions.has_account_permission"
+	for dt in ACCOUNT_SCOPED_DOCTYPES
+}
 
 # Document Events
 # ---------------
@@ -149,23 +162,11 @@ app_license = "mit"
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"rental.tasks.all"
-# 	],
-# 	"daily": [
-# 		"rental.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"rental.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"rental.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"rental.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+	"daily": [
+		"rental.rental.tasks.daily.expire_contracts_task",
+	],
+}
 
 # Testing
 # -------

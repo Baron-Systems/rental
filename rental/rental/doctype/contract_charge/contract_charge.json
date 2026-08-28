@@ -1,0 +1,129 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2025-01-01 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "due_type",
+  "responsibility",
+  "column_break_1",
+  "calculation_method",
+  "payment_by",
+  "amount_section",
+  "amount",
+  "frequency",
+  "first_due_date",
+  "commitment_timing",
+  "column_break_2",
+  "last_period_handling",
+  "last_period_adjustment_amount",
+  "meter_section",
+  "opening_meter_reading"
+ ],
+ "fields": [
+  {
+   "fieldname": "due_type",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Due Type",
+   "options": "Rental Due Type",
+   "reqd": 1
+  },
+  {
+   "fieldname": "responsibility",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Responsibility",
+   "options": "landlord\ntenant\nincluded",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "calculation_method",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Calculation Method",
+   "options": "\nmetered\nfixed_periodic\nactual_bill\non_demand"
+  },
+  {
+   "fieldname": "payment_by",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Payment By",
+   "options": "\nlandlord\ntenant"
+  },
+  {
+   "fieldname": "amount_section",
+   "fieldtype": "Section Break",
+   "label": "Amount & Schedule"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount"
+  },
+  {
+   "fieldname": "frequency",
+   "fieldtype": "Select",
+   "label": "Frequency",
+   "options": "\nmonthly\nbi_monthly\nquarterly\nsemi_annual\nannual"
+  },
+  {
+   "fieldname": "first_due_date",
+   "fieldtype": "Date",
+   "label": "First Due Date"
+  },
+  {
+   "fieldname": "commitment_timing",
+   "fieldtype": "Select",
+   "label": "Commitment Timing",
+   "options": "start\nend"
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_period_handling",
+   "fieldtype": "Select",
+   "label": "Last Period Handling",
+   "options": "\nnone\nprorated\nmanual"
+  },
+  {
+   "fieldname": "last_period_adjustment_amount",
+   "fieldtype": "Currency",
+   "label": "Last Period Adjustment Amount"
+  },
+  {
+   "fieldname": "meter_section",
+   "fieldtype": "Section Break",
+   "label": "Meter"
+  },
+  {
+   "fieldname": "opening_meter_reading",
+   "fieldtype": "Data",
+   "label": "Opening Meter Reading"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "is_submittable": 0,
+ "issingle": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-01-01 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Rental",
+ "name": "Contract Charge",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 1
+}

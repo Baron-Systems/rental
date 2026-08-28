@@ -1,0 +1,199 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2025-01-01 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "rental_account",
+  "building",
+  "floor",
+  "unit_number",
+  "unit_type",
+  "details_section",
+  "area",
+  "rooms_count",
+  "bathrooms_count",
+  "default_rent",
+  "meter_section",
+  "current_electricity_meter_reading",
+  "current_water_meter_reading",
+  "status_section",
+  "status",
+  "is_active",
+  "notes"
+ ],
+ "fields": [
+  {
+   "default": "UNT-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Naming Series",
+   "options": "UNT-.#####",
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "rental_account",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Rental Account",
+   "options": "Rental Account",
+   "read_only": 1
+  },
+  {
+   "fieldname": "building",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Building",
+   "options": "Rental Building",
+   "reqd": 1
+  },
+  {
+   "fieldname": "floor",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Floor",
+   "options": "Rental Floor"
+  },
+  {
+   "fieldname": "unit_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Unit Number",
+   "reqd": 1
+  },
+  {
+   "fieldname": "unit_type",
+   "fieldtype": "Select",
+   "label": "Unit Type",
+   "options": "\napartment\nshop\noffice\nwarehouse\nroom\ngarage\nindependent\nother",
+   "reqd": 1
+  },
+  {
+   "fieldname": "details_section",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
+   "fieldname": "area",
+   "fieldtype": "Float",
+   "label": "Area"
+  },
+  {
+   "fieldname": "rooms_count",
+   "fieldtype": "Int",
+   "label": "Rooms Count"
+  },
+  {
+   "fieldname": "bathrooms_count",
+   "fieldtype": "Int",
+   "label": "Bathrooms Count"
+  },
+  {
+   "fieldname": "default_rent",
+   "fieldtype": "Currency",
+   "label": "Default Rent"
+  },
+  {
+   "fieldname": "meter_section",
+   "fieldtype": "Section Break",
+   "label": "Meter Readings"
+  },
+  {
+   "fieldname": "electricity_meter_number",
+   "fieldtype": "Data",
+   "label": "Electricity Meter Number",
+   "length": 50
+  },
+  {
+   "fieldname": "water_meter_number",
+   "fieldtype": "Data",
+   "label": "Water Meter Number",
+   "length": 50
+  },
+  {
+   "fieldname": "current_electricity_meter_reading",
+   "fieldtype": "Data",
+   "label": "Current Electricity Meter Reading"
+  },
+  {
+   "fieldname": "current_water_meter_reading",
+   "fieldtype": "Data",
+   "label": "Current Water Meter Reading"
+  },
+  {
+   "fieldname": "status_section",
+   "fieldtype": "Section Break",
+   "label": "Status"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_manually_unavailable",
+   "fieldtype": "Check",
+   "label": "Manually Unavailable"
+  },
+  {
+   "default": "empty",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "empty\nrented\nreserved\nunavailable",
+   "read_only": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "label": "Is Active"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 0,
+ "issingle": 0,
+ "istable": 0,
+ "links": [],
+ "modified": "2025-01-01 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Rental",
+ "name": "Rental Unit",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Rental Property Owner",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "unit_number",
+ "track_changes": 1
+}

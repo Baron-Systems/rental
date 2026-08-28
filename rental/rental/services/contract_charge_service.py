@@ -1,0 +1,812 @@
+"""Contract charge validation, generation, and meter logic.
+
+Ported from ``src/services/contract-charge.service.ts``.
+"""
+
+from __future__ import annotations
+
+import frappe
+
+from rental.rental.utils.date_utils import (
+	to_calendar_day,
+	build_fixed_periodic_schedule,
+	round_money,
+	calendar_day_diff,
+	FIXED_PERIODIC_FREQUENCIES,
+)
+
+
+# Metered due type codes
+METERED_DUE_TYPES = ["electricity", "water"]
+
+
+# ---------------------------------------------------------------------------
+# Constants  (source: contract-charge.service.ts:16-82)
+# ---------------------------------------------------------------------------
+
+RESPONSIBILITIES = {"landlord": "landlord", "tenant": "tenant", "included": "included"}
+CALCULATION_METHODS = {"metered": "metered", "fixed_periodic": "fixed_periodic", "actual_bill": "actual_bill", "on_demand": "on_demand"}
+PAYMENT_BY = {"landlord": "landlord", "tenant": "tenant"}
+
+PAYMENT_BY_LABELS = {"landlord": "المؤجر", "tenant": "المستأجر (مباشر)"}
+RESPONSIBILITY_LABELS = {"landlord": "على المؤجر", "tenant": "على المستأجر", "included": "مشمول بالإيجار"}
+CALCULATION_METHOD_LABELS = {
+	"metered": "حسب الاستهلاك بالعداد",
+	"fixed_periodic": "مبلغ ثابت دوري",
+	"actual_bill": "حسب الفاتورة الفعلية",
+	"on_demand": "حسب الحاجة",
+}
+COMMITMENT_TIMING_LABELS = {"start": "بداية كل دورة", "end": "نهاية كل دورة"}
+LAST_PERIOD_HANDLING_LABELS = {"none": "لا يتم احتسابها", "prorated": "احتساب نسبي", "manual": "تسوية يدوية"}
+
+
+# ---------------------------------------------------------------------------
+# Type helpers  (source: contract-charge.service.ts:115-222)
+# ---------------------------------------------------------------------------
+
+
+def is_metered_due_type_code(code: str | None) -> bool:
+	"""Source: ``isMeteredDueTypeCode``."""
+	return bool(code) and code in METERED_DUE_TYPES
+
+
+def get_meter_field(code: str | None) -> str | None:
+	"""Source: ``getMeterField``."""
+	if code == "electricity":
+		return "current_electricity_meter_reading"
+	if code == "water":
+		return "current_water_meter_reading"
+	return None
+
+
+def is_allowed_responsibility(value: str) -> bool:
+	return value in RESPONSIBILITIES.values()
+
+
+def is_allowed_calculation_method(value: str) -> bool:
+	return value in CALCULATION_METHODS.values()
+
+
+def is_allowed_payment_by(value: str | None) -> bool:
+	return bool(value) and value in PAYMENT_BY.values()
+
+
+def is_allowed_calculation_method_for_due_type(code: str | None, method: str) -> bool:
+	"""Source: ``isAllowedCalculationMethodForDueType``."""
+	if not is_allowed_calculation_method(method):
+		return False
+	if is_metered_due_type_code(code):
+		return method != CALCULATION_METHODS["on_demand"]
+	return method != CALCULATION_METHODS["metered"]
+
+
+def get_default_responsibility_for_due_type(_code: str | None) -> str:
+	"""Source: ``getDefaultResponsibilityForDueType``."""
+	return RESPONSIBILITIES["landlord"]
+
+
+def get_default_payment_by_for_responsibility(responsibility: str) -> str | None:
+	"""Source: ``getDefaultPaymentByForResponsibility``."""
+	if responsibility == RESPONSIBILITIES["tenant"]:
+		return PAYMENT_BY["landlord"]
+	return None
+
+
+def get_default_calculation_method_for_due_type(code: str | None, responsibility: str, payment_by: str | None = None) -> str | None:
+	"""Source: ``getDefaultCalculationMethodForDueType``."""
+	if responsibility != RESPONSIBILITIES["tenant"]:
+		return None
+	if payment_by == PAYMENT_BY["tenant"]:
+		return None
+	return CALCULATION_METHODS["metered"] if is_metered_due_type_code(code) else CALCULATION_METHODS["fixed_periodic"]
+
+
+def get_available_responsibilities() -> list[dict]:
+	"""Source: ``getAvailableResponsibilities``."""
+	return [{"value": r, "label": RESPONSIBILITY_LABELS[r]} for r in RESPONSIBILITIES.values()]
+
+
+def get_available_calculation_methods_for_due_type(code: str | None, payment_by: str | None = None) -> list[dict]:
+	"""Source: ``getAvailableCalculationMethodsForDueType``."""
+	if payment_by == PAYMENT_BY["tenant"]:
+		return []
+	if is_metered_due_type_code(code):
+		methods = ["metered", "fixed_periodic", "actual_bill"]
+	else:
+		methods = ["fixed_periodic", "actual_bill", "on_demand"]
+	return [{"value": m, "label": CALCULATION_METHOD_LABELS[m]} for m in methods]
+
+
+def get_available_calculation_methods_for_due_type_after_responsibility(
+	code: str | None, responsibility: str, payment_by: str | None = None
+) -> list[dict]:
+	"""Source: ``getAvailableCalculationMethodsForDueTypeAfterResponsibility``."""
+	if responsibility != RESPONSIBILITIES["tenant"]:
+		return []
+	return get_available_calculation_methods_for_due_type(code, payment_by)
+
+
+def parse_decimal_amount(value) -> float | None:
+	"""Source: ``parseDecimalAmount``."""
+	if value is None or value == "":
+		return None
+	try:
+		num = float(str(value).replace(",", ""))
+	except (ValueError, TypeError):
+		return None
+	return num
+
+
+def parse_date(value):
+	"""Source: ``parseDate``."""
+	if not value:
+		return None
+	return to_calendar_day(value)
+
+
+def normalize_meter_reading(value) -> str | None:
+	"""Source: ``normalizeMeterReading``."""
+	if value is None or value == "":
+		return None
+	str_val = str(value).strip()
+	if str_val == "":
+		return None
+	try:
+		num = float(str_val)
+	except ValueError:
+		return None
+	return str(num)
+
+
+def is_valid_commitment_timing(value: str | None) -> bool:
+	return bool(value) and value in ("start", "end")
+
+
+def is_valid_last_period_handling(value: str | None) -> bool:
+	return bool(value) and value in ("none", "prorated", "manual")
+
+
+# ---------------------------------------------------------------------------
+# Validation  (source: validateContractCharges)
+# ---------------------------------------------------------------------------
+
+
+def validate_contract_charges(
+	charge_inputs: list[dict],
+	account: str,
+	contract_start_date=None,
+	contract_end_date=None,
+) -> list[dict]:
+	"""Validate a list of charge input dicts.
+
+	Returns the validated list (possibly normalised).
+
+	Rules (source: ``validateContractCharges``):
+	- No duplicate due type per contract.
+	- Due type must exist and be active (or system).
+	- rent due type is excluded (handled by due generation).
+	- landlord/included: no paymentBy/calculationMethod allowed.
+	- tenant: paymentBy required.
+	- paymentBy=tenant: no calculation method.
+	- paymentBy=landlord: calculation method required.
+	- fixed_periodic: amount, frequency, commitmentTiming required; firstDueDate forced to contract.startDate; ≥2 cycles.
+	- metered: openingMeterReading required; only electricity/water.
+	"""
+	if not isinstance(charge_inputs, list):
+		frappe.throw(frappe._("بيانات الالتزامات غير صالحة"))
+
+	seen_due_types = set()
+	validated = []
+
+	for charge in charge_inputs:
+		due_type_name = charge.get("due_type")
+		if not due_type_name:
+			frappe.throw(frappe._("نوع الالتزام مطلوب لكل خدمة"))
+
+		# Check duplicate
+		if due_type_name in seen_due_types:
+			frappe.throw(frappe._("لا يمكن تكرار نوع الالتزام في نفس العقد"))
+		seen_due_types.add(due_type_name)
+
+		# Check due type exists
+		dt = frappe.db.get_value(
+			"Rental Due Type", due_type_name,
+			["name", "due_type_code", "is_system", "is_active", "rental_account", "due_type_name"],
+			as_dict=True,
+		)
+		if not dt:
+			frappe.throw(frappe._("نوع الالتزام غير موجود"))
+
+		# Use due_type_name field for messages (falls back to name)
+		dt_display = dt.due_type_name or dt.name
+
+		# Account isolation: custom due types must belong to same account
+		# System due types have no account restriction
+		if account and dt.rental_account and not dt.is_system:
+			if dt.rental_account != account:
+				frappe.throw(frappe._("نوع الالتزام {0} لا ينتمي إلى هذا الحساب").format(dt_display))
+
+		# rent due type is excluded from charges
+		if dt.due_type_code == "rent":
+			frappe.throw(frappe._("نوع الالتزام إيجار تتم إدارته تلقائياً ولا يمكن إضافته كرسم"))
+
+		# Due type must be active (or system)
+		if not dt.is_active and not dt.is_system:
+			frappe.throw(frappe._("نوع الالتزام {0} غير فعال ولا يمكن استخدامه في العقد").format(dt_display))
+
+		responsibility = charge.get("responsibility")
+		if not is_allowed_responsibility(responsibility):
+			frappe.throw(frappe._("المسؤولية المحددة لخدمة {0} غير صالحة").format(dt_display))
+
+		calculation_method = charge.get("calculation_method")
+		payment_by_value = charge.get("payment_by")
+		payment_by = payment_by_value if payment_by_value else None
+
+		if responsibility in (RESPONSIBILITIES["landlord"], RESPONSIBILITIES["included"]):
+			# No paymentBy allowed (source: contract-charge.service.ts:293-299)
+			if payment_by:
+				frappe.throw(
+					frappe._("خيار الدفع لا ينطبق على خدمة {0} عندما يكون المتحمل {1}").format(
+						dt_display, RESPONSIBILITY_LABELS[responsibility]
+					)
+				)
+			# No calculationMethod allowed (source: contract-charge.service.ts:300-306)
+			if calculation_method:
+				frappe.throw(
+					frappe._("طريقة الاحتساب غير مطلوبة لخدمة {0} عندما يكون المتحمل {1}").format(
+						dt_display, RESPONSIBILITY_LABELS[responsibility]
+					)
+				)
+		elif responsibility == RESPONSIBILITIES["tenant"]:
+			if not is_allowed_payment_by(payment_by):
+				frappe.throw(
+					frappe._("يجب تحديد من يدفع قيمة خدمة {0} (المؤجر أو المستأجر مباشرة)").format(dt_display)
+				)
+
+			if payment_by == PAYMENT_BY["tenant"]:
+				# No calculation method — tenant pays directly
+				if calculation_method:
+					frappe.throw(
+						frappe._("لا توجد طريقة احتساب لخدمة {0} عندما يدفع المستأجر مباشرة للجهة المختصة").format(dt_display)
+					)
+			elif payment_by == PAYMENT_BY["landlord"]:
+				# Calculation method required
+				if not calculation_method:
+					frappe.throw(frappe._("طريقة الاحتساب مطلوبة لخدمة {0}").format(dt_display))
+
+				if not is_allowed_calculation_method_for_due_type(dt.due_type_code, calculation_method):
+					frappe.throw(
+						frappe._("طريقة الاحتساب {0} غير مسموح بها لخدمة {1}").format(
+							CALCULATION_METHOD_LABELS.get(calculation_method, calculation_method), dt_display
+						)
+					)
+
+				if calculation_method == CALCULATION_METHODS["fixed_periodic"]:
+					_validate_fixed_periodic(charge, dt_display, contract_start_date, contract_end_date)
+				elif calculation_method == CALCULATION_METHODS["metered"]:
+					_validate_metered(charge, dt, dt_display)
+				elif calculation_method in (CALCULATION_METHODS["actual_bill"], CALCULATION_METHODS["on_demand"]):
+					pass  # valid
+				else:
+					frappe.throw(frappe._("طريقة الاحتساب غير صالحة: {0}").format(calculation_method))
+
+		validated.append(charge)
+
+	return validated
+
+
+def _validate_fixed_periodic(charge, dt_display, contract_start_date=None, contract_end_date=None):
+	amount = parse_decimal_amount(charge.get("amount"))
+	if amount is None or amount <= 0:
+		frappe.throw(frappe._("المبلغ مطلوب وأكبر من صفر لخدمة {0}").format(dt_display))
+	frequency = charge.get("frequency")
+	if not frequency or frequency not in FIXED_PERIODIC_FREQUENCIES:
+		frappe.throw(frappe._("الدورية مطلوبة أو غير صالحة لخدمة {0}").format(dt_display))
+	commitment_timing = charge.get("commitment_timing")
+	if not is_valid_commitment_timing(commitment_timing):
+		frappe.throw(frappe._("توقيت الاستحقاق مطلوب لخدمة {0}").format(dt_display))
+
+	# Force first_due_date = contract.start_date (source: validateContractCharges)
+	if contract_start_date:
+		charge["first_due_date"] = to_calendar_day(contract_start_date)
+	elif not charge.get("first_due_date"):
+		frappe.throw(frappe._("تاريخ أول استحقاق مطلوب لخدمة {0}").format(dt_display))
+
+	# Validate at least 2 full cycles within contract period
+	# Source: contract-charge.service.ts:354-368 — uses buildFixedPeriodicSchedule
+	if contract_start_date and contract_end_date:
+		from rental.rental.utils.date_utils import build_fixed_periodic_schedule
+		start_day = to_calendar_day(contract_start_date)
+		end_day = to_calendar_day(contract_end_date)
+		schedule = build_fixed_periodic_schedule(
+			{
+				"amount": amount,
+				"frequency": frequency,
+				"first_due_date": start_day,
+				"commitment_timing": commitment_timing,
+				"last_period_handling": charge.get("last_period_handling"),
+				"last_period_adjustment_amount": charge.get("last_period_adjustment_amount"),
+			},
+			end_day,
+		)
+		if len(schedule) < 2:
+			frappe.throw(
+				frappe._("الدورية المختارة لخدمة {0} لا تنتج دورتين كاملتين ضمن مدة العقد").format(dt_display)
+			)
+
+
+def _validate_metered(charge, dt, dt_display):
+	if dt.due_type_code not in METERED_DUE_TYPES:
+		frappe.throw(frappe._("طريقة الاحتساب حسب العداد مسموحة فقط للكهرباء والمياه: {0}").format(dt_display))
+	if not normalize_meter_reading(charge.get("opening_meter_reading")):
+		frappe.throw(frappe._("قراءة بداية العداد مطلوبة لخدمة {0}").format(dt_display))
+
+
+# ---------------------------------------------------------------------------
+# Save contract charges  (source: saveContractCharges)
+# ---------------------------------------------------------------------------
+
+
+def save_contract_charges(contract_doc, charge_inputs: list[dict], account: str) -> None:
+	"""Validate and persist contract charges on *contract_doc*.
+
+	Replaces existing charges with the new validated set.
+	"""
+	validated = validate_contract_charges(
+		charge_inputs,
+		account,
+		contract_start_date=contract_doc.start_date,
+		contract_end_date=contract_doc.end_date,
+	)
+
+	# Clear existing charges
+	contract_doc.set("contract_charges", [])
+
+	for charge in validated:
+		contract_doc.append("contract_charges", {
+			"due_type": charge.get("due_type"),
+			"responsibility": charge.get("responsibility"),
+			"calculation_method": charge.get("calculation_method"),
+			"payment_by": charge.get("payment_by"),
+			"amount": charge.get("amount"),
+			"frequency": charge.get("frequency"),
+			"first_due_date": charge.get("first_due_date"),
+			"commitment_timing": charge.get("commitment_timing"),
+			"last_period_handling": charge.get("last_period_handling"),
+			"last_period_adjustment_amount": charge.get("last_period_adjustment_amount"),
+			"opening_meter_reading": charge.get("opening_meter_reading"),
+		})
+
+
+# ---------------------------------------------------------------------------
+# Fixed-periodic due generation  (source: generateFixedPeriodicDues)
+# ---------------------------------------------------------------------------
+
+
+def generate_fixed_periodic_dues(contract_doc, account: str) -> int:
+	"""Create Due rows for fixed_periodic tenant charges paid by landlord.
+
+	Skips if a Due already exists for that due_type under this contract.
+	Returns the number of dues created.
+	"""
+	from rental.rental.services.due_generation_service import create_due_from_schedule
+
+	created = 0
+
+	for charge in contract_doc.contract_charges:
+		if (
+			charge.responsibility == "tenant"
+			# A18: legacy filters paymentBy === 'landlord' || paymentBy == null.
+			and charge.payment_by in ("landlord", None)
+			and charge.calculation_method == "fixed_periodic"
+			and charge.amount
+			and charge.frequency
+			and charge.first_due_date
+		):
+			# A18: skip if the due type is inactive (legacy line 529-532).
+			dt_active = frappe.db.get_value("Rental Due Type", charge.due_type, "is_active")
+			if not dt_active:
+				frappe.msgprint(frappe._("تخطي الالتزامات الدورية الثابتة لنوع التزام غير فعال: {0}").format(charge.due_type))
+				continue
+
+			# Check if dues already exist for this due_type
+			existing = frappe.db.exists(
+				"Rental Due",
+				{
+					"contract": contract_doc.name,
+					"due_type": charge.due_type,
+					"source_type": "auto_contract",
+				},
+			)
+			if existing:
+				continue
+
+			schedule = build_fixed_periodic_schedule({
+				"amount": charge.amount,
+				"frequency": charge.frequency,
+				"first_due_date": charge.first_due_date,
+				"commitment_timing": charge.commitment_timing,
+				"last_period_handling": charge.last_period_handling,
+				"last_period_adjustment_amount": charge.last_period_adjustment_amount,
+			}, contract_doc.end_date)
+
+			for item in schedule:
+				create_due_from_schedule(contract_doc, charge, item, account, calculation_method="fixed_periodic")
+				created += 1
+
+	return created
+
+
+# ---------------------------------------------------------------------------
+# Metered opening freeze  (source: freezeMeteredOpeningReadings)
+# ---------------------------------------------------------------------------
+
+
+def freeze_metered_opening_readings(contract_doc, account: str) -> None:
+	"""On approval, copy metered charge openingMeterReading into Unit meter fields.
+
+	Source: ``freezeMeteredOpeningReadings`` (contract-charge.service.ts:595-601).
+	Only applies to tenant charges paid by landlord (or null) with metered method.
+	"""
+	for charge in contract_doc.contract_charges:
+		if (
+			charge.calculation_method == "metered"
+			# A19: legacy filters responsibility===tenant && (paymentBy===landlord||null).
+			and charge.responsibility == "tenant"
+			and charge.payment_by in ("landlord", None)
+			and charge.opening_meter_reading is not None
+		):
+			dt_code = frappe.db.get_value("Rental Due Type", charge.due_type, "due_type_code")
+			if dt_code == "electricity":
+				frappe.db.set_value(
+					"Rental Unit", contract_doc.unit,
+					"current_electricity_meter_reading", charge.opening_meter_reading,
+					update_modified=False,
+				)
+			elif dt_code == "water":
+				frappe.db.set_value(
+					"Rental Unit", contract_doc.unit,
+					"current_water_meter_reading", charge.opening_meter_reading,
+					update_modified=False,
+				)
+
+
+# ---------------------------------------------------------------------------
+# Capture metered openings from unit  (source: captureMeteredOpeningsFromUnit)
+# ---------------------------------------------------------------------------
+
+
+def capture_metered_openings_from_unit(contract_doc, account: str) -> None:
+	"""On renewal start, copy current unit readings into new contract charge.
+
+	Source: ``captureMeteredOpeningsFromUnit`` (contract-charge.service.ts:628-633).
+	Only applies to tenant charges paid by landlord (or null) with metered method.
+	"""
+	unit = frappe.db.get_value(
+		"Rental Unit", contract_doc.unit,
+		["current_electricity_meter_reading", "current_water_meter_reading"],
+		as_dict=True,
+	)
+
+	for charge in contract_doc.contract_charges:
+		if (
+			charge.calculation_method == "metered"
+			# A19: legacy filters responsibility===tenant && (paymentBy===landlord||null).
+			and charge.responsibility == "tenant"
+			and charge.payment_by in ("landlord", None)
+		):
+			dt_code = frappe.db.get_value("Rental Due Type", charge.due_type, "due_type_code")
+			if dt_code == "electricity" and unit.current_electricity_meter_reading is not None:
+				charge.opening_meter_reading = unit.current_electricity_meter_reading
+			elif dt_code == "water" and unit.current_water_meter_reading is not None:
+				charge.opening_meter_reading = unit.current_water_meter_reading
+
+
+# ---------------------------------------------------------------------------
+# Previous meter reading  (source: getPreviousMeterReading)
+# ---------------------------------------------------------------------------
+
+
+def get_previous_meter_reading(contract_name: str, unit_name: str, due_type_name: str) -> str:
+	"""Return the last approved meter reading, or contract charge opening, or '0'.
+
+	Source: ``getPreviousMeterReading`` (contract-charge.service.ts:663-688).
+	Orders by [transactionDate desc, createdAt desc] and returns a string.
+	"""
+	# 1. Last approved due with a current meter reading for this contract/type
+	# A20: add creation desc tiebreaker to match legacy orderBy.
+	last_due = frappe.get_all(
+		"Rental Due",
+		filters={
+			"contract": contract_name,
+			"due_type": due_type_name,
+			"docstatus": 1,
+			"current_meter_reading": ["is", "set"],
+		},
+		fields=["current_meter_reading"],
+		order_by="transaction_date desc, creation desc",
+		limit=1,
+	)
+	if last_due and last_due[0].current_meter_reading is not None:
+		# A20: return string to match legacy.
+		return str(last_due[0].current_meter_reading)
+
+	# 2. Contract charge opening meter reading
+	charge = frappe.db.get_value(
+		"Contract Charge",
+		{"parent": contract_name, "parenttype": "Lease Contract", "due_type": due_type_name},
+		"opening_meter_reading",
+	)
+	if charge is not None:
+		return str(charge)
+
+	# 3. Default '0' (string, matching legacy)
+	return "0"
+
+
+# ---------------------------------------------------------------------------
+# Meter field mapping  (source: getMeterField)
+# ---------------------------------------------------------------------------
+
+
+def get_meter_field(due_type_code: str) -> str | None:
+	"""Return the unit field name for a metered due type code."""
+	if due_type_code == "electricity":
+		return "current_electricity_meter_reading"
+	if due_type_code == "water":
+		return "current_water_meter_reading"
+	return None
+
+
+# ---------------------------------------------------------------------------
+# Can create meter due  (source: canCreateMeterDue)
+# ---------------------------------------------------------------------------
+
+
+def can_create_meter_due(contract_name: str, due_type_name: str) -> bool:
+	"""Validate that a metered due can be created for a contract.
+
+	Source: ``canCreateMeterDue`` (contract-charge.service.ts:713-724).
+	Requires a tenant charge (paymentBy landlord or null) with metered method.
+	"""
+	contract = frappe.db.get_value(
+		"Lease Contract", contract_name,
+		["status", "start_date", "unit"],
+		as_dict=True,
+	)
+	if not contract:
+		return False
+
+	if contract.status not in ("active", "expired"):
+		return False
+
+	today = to_calendar_day(frappe.utils.today())
+	start = to_calendar_day(contract.start_date)
+	if start > today:
+		return False
+
+	# A19: legacy filters responsibility===tenant && (paymentBy===landlord||null) && metered.
+	charge = frappe.db.exists(
+		"Contract Charge",
+		{
+			"parent": contract_name,
+			"parenttype": "Lease Contract",
+			"due_type": due_type_name,
+			"responsibility": "tenant",
+			"payment_by": ["in", ["landlord", None]],
+			"calculation_method": "metered",
+		},
+	)
+	return bool(charge)
+
+
+# ---------------------------------------------------------------------------
+# Has active metered contract  (source: hasActiveMeteredContract)
+# ---------------------------------------------------------------------------
+
+
+def has_active_metered_contract(unit_name: str, due_type_code: str) -> bool:
+	"""Whether an active current contract has a metered charge for electricity/water."""
+	today = to_calendar_day(frappe.utils.today())
+
+	contracts = frappe.get_all(
+		"Lease Contract",
+		filters={
+			"unit": unit_name,
+			"status": "active",
+			"start_date": ["<=", today],
+			"end_date": [">=", today],
+		},
+		fields=["name"],
+	)
+
+	for c in contracts:
+		charges = frappe.get_all(
+			"Contract Charge",
+			filters={
+				"parent": c.name,
+				"parenttype": "Lease Contract",
+				"calculation_method": "metered",
+			},
+			fields=["due_type"],
+		)
+		for ch in charges:
+			code = frappe.db.get_value("Rental Due Type", ch.due_type, "due_type_code")
+			if code == due_type_code:
+				return True
+
+	return False
+
+
+# ---------------------------------------------------------------------------
+# Copy charges for renewal  (source: copyContractChargesForRenewal)
+# ---------------------------------------------------------------------------
+
+
+def copy_contract_charges_for_renewal(old_contract_doc, new_contract_doc, account: str) -> None:
+	"""Copy charges from old contract to new renewal contract.
+
+	Source: ``copyContractChargesForRenewal`` (contract-charge.service.ts:777-795).
+	- amount = charge.amount only when responsibility == 'tenant', else None.
+	- first_due_date = new contract start only when calculation_method == 'fixed_periodic', else None.
+	- opening_meter_reading = None (reset for renewal).
+	"""
+	new_contract_doc.set("contract_charges", [])
+
+	for charge in old_contract_doc.contract_charges:
+		is_tenant = charge.responsibility == "tenant"
+		is_fixed_periodic = charge.calculation_method == "fixed_periodic"
+		new_contract_doc.append("contract_charges", {
+			"due_type": charge.due_type,
+			"responsibility": charge.responsibility,
+			"calculation_method": charge.calculation_method,
+			"payment_by": charge.payment_by,
+			# A16: amount only for tenant charges (legacy line 785).
+			"amount": charge.amount if is_tenant else None,
+			"frequency": charge.frequency if is_fixed_periodic else None,
+			# A16: first_due_date only for fixed_periodic (legacy line 787-788).
+			"first_due_date": new_contract_doc.start_date if is_fixed_periodic else None,
+			"commitment_timing": charge.commitment_timing,
+			"last_period_handling": charge.last_period_handling,
+			"last_period_adjustment_amount": charge.last_period_adjustment_amount,
+			"opening_meter_reading": None,  # Reset for renewal
+		})
+
+
+# ---------------------------------------------------------------------------
+# Build service clause text  (source: buildServiceClauseText)
+# ---------------------------------------------------------------------------
+
+
+def build_service_clause_text(charge) -> str | None:
+	"""Return Arabic contract clause text for a charge (for print).
+
+	Source: ``buildServiceClauseText`` (contract-charge.service.ts:818-855).
+	Returns ``None`` when the charge is invalid (e.g. tenant charge with a
+	calculation method not allowed for the due type).
+	"""
+	dt = frappe.db.get_value(
+		"Rental Due Type", charge.due_type,
+		["due_type_name", "due_type_code"], as_dict=True,
+	)
+	if not dt:
+		return None
+	dt_name = dt.due_type_name
+	dt_code = dt.due_type_code
+
+	# Tenant charge with a calculation method not allowed for the due type → None.
+	if charge.responsibility == "tenant" and charge.calculation_method:
+		if not _is_allowed_calculation_method_for_due_type(dt_code, charge.calculation_method):
+			return None
+
+	if charge.responsibility == "landlord":
+		return f"يتحمل المؤجر التكاليف المتعلقة بـ {dt_name}، ولا يترتب على المستأجر أي التزام مالي مستقل بشأنها."
+	if charge.responsibility == "included":
+		return f"تُعد خدمة {dt_name} مشمولة في مبلغ الإيجار المتفق عليه، ولا يترتب على المستأجر أي مبلغ إضافي مستقل بشأنها."
+	if charge.responsibility == "tenant":
+		if charge.payment_by == "tenant":
+			return f"يلتزم المستأجر بتسديد فواتير {dt_name} مباشرة للجهة المختصة، ولا يترتب على المؤجر أي التزام مالي مستقل بشأنها."
+		method = charge.calculation_method
+		if method == "fixed_periodic":
+			if not charge.amount or not charge.frequency:
+				return None
+			freq_label = _get_frequency_label(charge.frequency)
+			return f"يلتزم المستأجر بسداد مبلغ قدره {_format_currency(float(charge.amount))} {freq_label} بدل {dt_name} للمؤجر."
+		if method == "metered":
+			reading = charge.opening_meter_reading or "—"
+			return f"يتحمل المستأجر تكاليف استهلاك {dt_name} حسب قراءة العداد، وتبلغ قراءة العداد عند بداية العقد {reading}، ويُحتسب الاستهلاك وفق سعر الوحدة المعتمد وقت تسجيل الاستهلاك، ويسدد المبلغ للمؤجر."
+		if method == "actual_bill":
+			return f"يتحمل المستأجر تكلفة {dt_name} وفق قيمة الفاتورة الفعلية المسجلة خلال مدة العقد، ويسددها للمؤجر."
+		if method == "on_demand":
+			return f"يتحمل المستأجر تكاليف {dt_name} عند الحاجة وفق المبالغ المستحقة والمسجلة خلال مدة العقد، ويسدها للمؤجر."
+	return None
+
+
+def _is_allowed_calculation_method_for_due_type(code: str | None, method: str) -> bool:
+	"""Source: isAllowedCalculationMethodForDueType (contract-charge.service.ts:137-146)."""
+	if method not in ("metered", "fixed_periodic", "actual_bill", "on_demand"):
+		return False
+	if code in METERED_DUE_TYPES:
+		return method != "on_demand"
+	return method != "metered"
+
+
+def _get_frequency_label(frequency: str) -> str:
+	"""Source: getFrequencyLabel (contract-charge.service.ts:857-873)."""
+	labels = {
+		"once": "مرة واحدة",
+		"monthly": "شهريًا",
+		"bi_monthly": "كل شهرين",
+		"quarterly": "ربع سنويًا",
+		"semi_annual": "نصف سنويًا",
+		"annual": "سنويًا",
+	}
+	return labels.get(frequency, frequency)
+
+
+def _format_currency(amount: float) -> str:
+	"""Source: formatCurrency (contract-charge.service.ts:876-878)."""
+	return f"{amount:,.2f}"
+
+
+# ---------------------------------------------------------------------------
+# Default contract charges  (source: getDefaultContractCharges)
+# ---------------------------------------------------------------------------
+
+
+def get_default_contract_charges(account: str, unit_name: str | None = None) -> list[dict]:
+	"""Return default charges for a new contract.
+
+	Source: ``getDefaultContractCharges`` (contract-charge.service.ts:443-481).
+	Returns ALL active due types EXCEPT rent, each with:
+	- responsibility = 'landlord'
+	- payment_by = None
+	- calculation_method = None
+	- amount, frequency, first_due_date, etc. = None
+	- opening_meter_reading = None (meter readings are only relevant when
+	  responsibility is tenant, which is not the default).
+
+	System due types (rent excluded) are listed first (is_system desc).
+	"""
+	# Ensure system due types exist before listing defaults.
+	from rental.rental.services.due_generation_service import ensure_system_due_types
+	ensure_system_due_types()
+
+	filters = {"is_active": 1}
+	if account:
+		# Include system due types (no account) + account-scoped due types.
+		filters = {
+			"is_active": 1,
+			"or": [
+				{"is_system": 1},
+				{"rental_account": account},
+			],
+		}
+
+	due_types = frappe.get_all(
+		"Rental Due Type",
+		filters=filters,
+		fields=["name", "due_type_code", "due_type_name", "is_system"],
+		order_by="is_system desc",
+	)
+
+	defaults = []
+	for dt in due_types:
+		# Exclude rent (handled by rent due generation).
+		if dt.due_type_code == "rent":
+			continue
+		defaults.append({
+			"due_type": dt.name,
+			"responsibility": "landlord",
+			"payment_by": None,
+			"calculation_method": None,
+			"amount": None,
+			"frequency": None,
+			"first_due_date": None,
+			"commitment_timing": None,
+			"last_period_handling": None,
+			"last_period_adjustment_amount": None,
+			"opening_meter_reading": None,
+		})
+
+	return defaults

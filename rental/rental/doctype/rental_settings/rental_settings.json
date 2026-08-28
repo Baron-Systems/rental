@@ -1,0 +1,313 @@
+{
+ "actions": [],
+ "autoname": "format:SET-{rental_account}",
+ "creation": "2025-01-01 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "rental_account",
+  "landlord_section",
+  "landlord_type",
+  "landlord_name",
+  "landlord_id",
+  "landlord_phone",
+  "landlord_address",
+  "column_break_1",
+  "logo",
+  "representative_section",
+  "landlord_representative_name",
+  "landlord_representative_id",
+  "landlord_representative_title",
+  "currency_section",
+  "currency",
+  "currency_locked",
+  "numbering_section",
+  "contract_prefix",
+  "contract_counter",
+  "column_break_2",
+  "due_prefix",
+  "due_counter",
+  "column_break_3",
+  "receipt_prefix",
+  "receipt_counter",
+  "defaults_section",
+  "default_contract_duration",
+  "default_payment_frequency",
+  "default_payment_method",
+  "column_break_4",
+  "contract_alert_days",
+  "auto_approve_contract",
+  "print_section",
+  "print_header",
+  "print_footer",
+  "column_break_5",
+  "show_due_schedule",
+  "print_logo",
+  "default_terms_section",
+  "default_contract_terms"
+ ],
+ "fields": [
+  {
+   "fieldname": "rental_account",
+   "fieldtype": "Link",
+   "label": "Rental Account",
+   "options": "Rental Account",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "landlord_section",
+   "fieldtype": "Section Break",
+   "label": "Landlord / Company Info"
+  },
+  {
+   "fieldname": "landlord_type",
+   "fieldtype": "Select",
+   "label": "Landlord Type",
+   "options": "\nperson\ncompany"
+  },
+  {
+   "fieldname": "landlord_name",
+   "fieldtype": "Data",
+   "label": "Landlord Name"
+  },
+  {
+   "fieldname": "landlord_id",
+   "fieldtype": "Data",
+   "label": "Landlord ID"
+  },
+  {
+   "fieldname": "landlord_phone",
+   "fieldtype": "Data",
+   "label": "Landlord Phone"
+  },
+  {
+   "fieldname": "landlord_address",
+   "fieldtype": "Small Text",
+   "label": "Landlord Address"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "logo",
+   "fieldtype": "Attach Image",
+   "label": "Logo"
+  },
+  {
+   "fieldname": "representative_section",
+   "fieldtype": "Section Break",
+   "label": "Representative"
+  },
+  {
+   "fieldname": "landlord_representative_name",
+   "fieldtype": "Data",
+   "label": "Representative Name"
+  },
+  {
+   "fieldname": "landlord_representative_id",
+   "fieldtype": "Data",
+   "label": "Representative ID"
+  },
+  {
+   "fieldname": "landlord_representative_title",
+   "fieldtype": "Data",
+   "label": "Representative Title"
+  },
+  {
+   "fieldname": "currency_section",
+   "fieldtype": "Section Break",
+   "label": "Currency"
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Select",
+   "label": "Currency",
+   "options": "\nILS\nJOD\nUSD",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "currency_locked",
+   "fieldtype": "Check",
+   "label": "Currency Locked",
+   "read_only": 1
+  },
+  {
+   "fieldname": "numbering_section",
+   "fieldtype": "Section Break",
+   "label": "Numbering"
+  },
+  {
+   "default": "CNT",
+   "fieldname": "contract_prefix",
+   "fieldtype": "Data",
+   "label": "Contract Prefix"
+  },
+  {
+   "default": "1",
+   "fieldname": "contract_counter",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Contract Counter"
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "DUE",
+   "fieldname": "due_prefix",
+   "fieldtype": "Data",
+   "label": "Due Prefix"
+  },
+  {
+   "default": "1",
+   "fieldname": "due_counter",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Due Counter"
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "RCPT",
+   "fieldname": "receipt_prefix",
+   "fieldtype": "Data",
+   "label": "Receipt Prefix"
+  },
+  {
+   "default": "1",
+   "fieldname": "receipt_counter",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Receipt Counter"
+  },
+  {
+   "fieldname": "defaults_section",
+   "fieldtype": "Section Break",
+   "label": "Defaults"
+  },
+  {
+   "default": "12",
+   "fieldname": "default_contract_duration",
+   "fieldtype": "Int",
+   "label": "Default Contract Duration (months)"
+  },
+  {
+   "default": "monthly",
+   "fieldname": "default_payment_frequency",
+   "fieldtype": "Select",
+   "label": "Default Payment Frequency",
+   "options": "once\nmonthly\nbi_monthly\nquarterly\nsemi_annual\nannual"
+  },
+  {
+   "fieldname": "default_payment_method",
+   "fieldtype": "Data",
+   "label": "Default Payment Method"
+  },
+  {
+   "fieldname": "column_break_4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "30",
+   "fieldname": "contract_alert_days",
+   "fieldtype": "Int",
+   "label": "Contract Alert Days"
+  },
+  {
+   "default": "0",
+   "fieldname": "auto_approve_contract",
+   "fieldtype": "Check",
+   "label": "Auto Approve Contract"
+  },
+  {
+   "fieldname": "print_section",
+   "fieldtype": "Section Break",
+   "label": "Print Settings"
+  },
+  {
+   "fieldname": "print_header",
+   "fieldtype": "Small Text",
+   "label": "Print Header"
+  },
+  {
+   "fieldname": "print_footer",
+   "fieldtype": "Small Text",
+   "label": "Print Footer"
+  },
+  {
+   "fieldname": "column_break_5",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "show_due_schedule",
+   "fieldtype": "Check",
+   "label": "Show Due Schedule"
+  },
+  {
+   "default": "1",
+   "fieldname": "print_logo",
+   "fieldtype": "Check",
+   "label": "Print Logo"
+  },
+  {
+   "fieldname": "default_terms_section",
+   "fieldtype": "Section Break",
+   "label": "Default Contract Terms"
+  },
+  {
+   "fieldname": "default_contract_terms",
+   "fieldtype": "Text",
+   "label": "Default Contract Terms"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 0,
+ "issingle": 0,
+ "istable": 0,
+ "links": [],
+ "modified": "2025-01-01 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Rental",
+ "name": "Rental Settings",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "if_owner": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Rental Property Owner",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

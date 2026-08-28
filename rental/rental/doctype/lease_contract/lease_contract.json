@@ -1,0 +1,338 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2025-01-01 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "rental_account",
+  "contract_number",
+  "contract_parties_section",
+  "tenant",
+  "building",
+  "unit",
+  "column_break_1",
+  "status",
+  "contract_dates_section",
+  "start_date",
+  "end_date",
+  "contract_date",
+  "first_due_date",
+  "column_break_2",
+  "is_historical",
+  "rent_section",
+  "rent_amount",
+  "payment_frequency",
+  "commitment_timing",
+  "column_break_3",
+  "payment_method",
+  "charges_section",
+  "contract_charges",
+  "terms_section",
+  "terms",
+  "witnesses",
+  "lessor_snapshot",
+  "lifecycle_section",
+  "cancelled_at",
+  "cancellation_reason",
+  "archived_at",
+  "is_archived",
+  "column_break_4",
+  "renewed_from_contract",
+  "closed_by_renewal_at",
+  "attachments_section",
+  "contract_attachments"
+ ],
+ "fields": [
+  {
+   "fieldname": "rental_account",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Rental Account",
+   "options": "Rental Account",
+   "read_only": 1
+  },
+  {
+   "fieldname": "contract_number",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Contract Number",
+   "read_only": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "contract_parties_section",
+   "fieldtype": "Section Break",
+   "label": "Contract Parties"
+  },
+  {
+   "fieldname": "tenant",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Tenant",
+   "options": "Rental Tenant",
+   "reqd": 1
+  },
+  {
+   "fieldname": "building",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Building",
+   "options": "Rental Building",
+   "reqd": 1
+  },
+  {
+   "fieldname": "unit",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Unit",
+   "options": "Rental Unit",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "draft\nactive\nexpired\ncancelled\nevicted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "contract_dates_section",
+   "fieldtype": "Section Break",
+   "label": "Contract Dates"
+  },
+  {
+   "fieldname": "start_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Start Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "end_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "End Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "contract_date",
+   "fieldtype": "Date",
+   "label": "Contract Date"
+  },
+  {
+   "fieldname": "first_due_date",
+   "fieldtype": "Date",
+   "label": "First Due Date"
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_historical",
+   "fieldtype": "Check",
+   "label": "Is Historical",
+   "read_only": 1
+  },
+  {
+   "fieldname": "rent_section",
+   "fieldtype": "Section Break",
+   "label": "Rent"
+  },
+  {
+   "fieldname": "rent_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Rent Amount",
+   "reqd": 1
+  },
+  {
+   "fieldname": "payment_frequency",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Payment Frequency",
+   "options": "once\nmonthly\nbi_monthly\nquarterly\nsemi_annual\nannual",
+   "reqd": 1
+  },
+  {
+   "fieldname": "commitment_timing",
+   "fieldtype": "Select",
+   "label": "Commitment Timing",
+   "options": "start\nend"
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "payment_method",
+   "fieldtype": "Data",
+   "label": "Payment Method"
+  },
+  {
+   "fieldname": "charges_section",
+   "fieldtype": "Section Break",
+   "label": "Service Charges"
+  },
+  {
+   "fieldname": "contract_charges",
+   "fieldtype": "Table",
+   "label": "Contract Charges",
+   "options": "Contract Charge"
+  },
+  {
+   "fieldname": "terms_section",
+   "fieldtype": "Section Break",
+   "label": "Terms"
+  },
+  {
+   "fieldname": "terms",
+   "fieldtype": "Text",
+   "label": "Terms"
+  },
+  {
+   "fieldname": "witnesses",
+   "fieldtype": "Text",
+   "label": "Witnesses"
+  },
+  {
+   "fieldname": "lessor_snapshot",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Lessor Snapshot",
+   "read_only": 1
+  },
+  {
+   "fieldname": "lifecycle_section",
+   "fieldtype": "Section Break",
+   "label": "Lifecycle"
+  },
+  {
+   "fieldname": "cancelled_at",
+   "fieldtype": "Datetime",
+   "label": "Cancelled At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cancellation_reason",
+   "fieldtype": "Small Text",
+   "label": "Cancellation Reason",
+   "read_only": 1
+  },
+  {
+   "fieldname": "archived_at",
+   "fieldtype": "Datetime",
+   "label": "Archived At",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_archived",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Is Archived",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_4",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "renewed_from_contract",
+   "fieldtype": "Link",
+   "label": "Renewed From Contract",
+   "options": "Lease Contract",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closed_by_renewal_at",
+   "fieldtype": "Datetime",
+   "label": "Closed By Renewal At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "attachments_section",
+   "fieldtype": "Section Break",
+   "label": "Attachments"
+  },
+  {
+   "fieldname": "contract_attachments",
+   "fieldtype": "Table",
+   "label": "Contract Attachments",
+   "options": "Contract Attachment"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "is_submittable": 0,
+ "issingle": 0,
+ "istable": 0,
+ "links": [
+  {
+   "link_doctype": "Rental Due",
+   "link_fieldname": "contract"
+  },
+  {
+   "link_doctype": "Rental Receipt",
+   "link_fieldname": "contract"
+  },
+  {
+   "link_doctype": "Rental Eviction",
+   "link_fieldname": "contract"
+  },
+  {
+   "link_doctype": "Contract Cancellation Settlement",
+   "link_fieldname": "contract"
+  }
+ ],
+ "modified": "2025-01-01 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Rental",
+ "name": "Lease Contract",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Rental Property Owner",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "contract_number,tenant,building,unit,status",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "contract_number",
+ "track_changes": 1
+}

@@ -1,0 +1,123 @@
+"""Cancel manual dues and rollback meter readings.
+
+Ported from ``src/services/cancellation.service.ts``.
+"""
+
+from __future__ import annotations
+
+import frappe
+
+from rental.rental.services.contract_charge_service import get_meter_field
+
+
+def cancel_due(due_name: str, reason: str) -> None:
+	"""Cancel a manual/metered due and roll back unit meter readings.
+
+	Source: ``cancelDue`` (cancellation.service.ts:6-85).
+	- Only manual source types can be cancelled.
+	- For metered dues: block if a newer approved meter reading exists;
+	  otherwise roll back to the previous approved reading, or to the
+	  contract charge's opening_meter_reading if none.
+	"""
+	due = frappe.get_doc("Rental Due", due_name)
+
+	# Only manual source types can be cancelled
+	if due.source_type not in ("manual", "manual_contract", "additional"):
+		frappe.throw(frappe._("لا يمكن إلغاء الالتزامات الناتجة من العقود فرديًا"))
+
+	if due.docstatus != 1:
+		frappe.throw(frappe._("Only approved dues can be cancelled."))
+
+	# B1: metered rollback logic (legacy lines 19-71).
+	is_meter_due = due.calculation_method == "metered"
+	if is_meter_due and due.contract and due.unit and due.current_meter_reading:
+		_rollback_meter(due, due_name, reason)
+
+	# Cancel the due
+	due.cancel()
+
+	# Set cancellation metadata
+	frappe.db.set_value("Rental Due", due_name, {
+		"cancellation_reason": reason,
+		"cancelled_by": frappe.session.user,
+		"cancelled_at": frappe.utils.now(),
+		"is_system_cancelled": 0,
+	}, update_modified=False)
+
+
+def _rollback_meter(due, due_name: str, reason: str):
+	"""Roll back the unit meter to the previous reading.
+
+	Source: cancellation.service.ts:22-71.
+	1. Find newer approved due with meter reading; block if exists.
+	2. Find previous approved due with meter reading for rollback value.
+	3. Fall back to contract charge opening_meter_reading.
+	4. Update the unit meter field.
+	"""
+	dt_code = frappe.db.get_value("Rental Due Type", due.due_type, "due_type_code")
+	field = get_meter_field(dt_code)
+	if not field:
+		return
+
+	# 1. Check for newer approved dues with meter readings (block if found).
+	# Legacy orders by [transactionDate desc, createdAt desc].
+	newer_dues = frappe.get_all(
+		"Rental Due",
+		filters={
+			"contract": due.contract,
+			"unit": due.unit,
+			"due_type": due.due_type,
+			"name": ["!=", due_name],
+			"current_meter_reading": ["is", "set"],
+			"docstatus": 1,
+		},
+		fields=["name", "transaction_date", "creation", "current_meter_reading"],
+		order_by="transaction_date desc, creation desc",
+		limit=1,
+	)
+
+	if newer_dues:
+		newer = newer_dues[0]
+		newer_date = frappe.utils.getdate(newer.transaction_date)
+		due_date = frappe.utils.getdate(due.transaction_date)
+		is_newer = newer_date > due_date or (
+			newer_date == due_date and newer.creation > due.creation
+		)
+		if is_newer:
+			frappe.throw(frappe._("لا يمكن إلغاء الالتزام لوجود حركة عداد أحدث"))
+
+	# 2. Find previous approved due with meter reading for rollback value.
+	previous_dues = frappe.get_all(
+		"Rental Due",
+		filters={
+			"contract": due.contract,
+			"unit": due.unit,
+			"due_type": due.due_type,
+			"name": ["!=", due_name],
+			"current_meter_reading": ["is", "set"],
+			"docstatus": 1,
+		},
+		fields=["name", "current_meter_reading"],
+		order_by="transaction_date desc, creation desc",
+		limit=1,
+	)
+
+	new_reading = None
+	if previous_dues and previous_dues[0].current_meter_reading is not None:
+		new_reading = previous_dues[0].current_meter_reading
+	else:
+		# 3. Fall back to contract charge opening_meter_reading.
+		charge = frappe.db.get_value(
+			"Contract Charge",
+			{"parent": due.contract, "parenttype": "Lease Contract", "due_type": due.due_type},
+			"opening_meter_reading",
+		)
+		if charge is not None:
+			new_reading = charge
+
+	# 4. Update the unit meter field.
+	if new_reading is not None:
+		frappe.db.set_value(
+			"Rental Unit", due.unit, field,
+			new_reading, update_modified=False,
+		)

@@ -1,0 +1,78 @@
+<template>
+  <div class="min-h-screen flex items-center justify-center p-4" dir="rtl" style="background: linear-gradient(135deg, #0a1530 0%, #0f1f42 50%, #060d1f 100%);">
+    <!-- Decorative gold orbs -->
+    <div class="absolute top-0 left-0 w-96 h-96 rounded-full opacity-10 blur-3xl" style="background: radial-gradient(circle, #d4a02c, transparent);"></div>
+    <div class="absolute bottom-0 right-0 w-96 h-96 rounded-full opacity-10 blur-3xl" style="background: radial-gradient(circle, #e3b94b, transparent);"></div>
+
+    <div class="relative w-full max-w-md animate-scale-in">
+      <!-- Logo -->
+      <div class="text-center mb-8">
+        <div class="inline-flex w-16 h-16 rounded-2xl items-center justify-center mb-4 shadow-soft-lg" style="background: linear-gradient(135deg, #e3b94b, #d4a02c);">
+          <svg class="w-8 h-8 text-navy-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+          </svg>
+        </div>
+        <h1 class="text-2xl font-bold text-white tracking-tight">نظام الإيجار</h1>
+        <p class="text-gold-400/70 text-sm font-medium mt-1">تسجيل الدخول إلى حسابك</p>
+      </div>
+
+      <!-- Card -->
+      <div class="card-premium p-8">
+        <form @submit.prevent="handleLogin" class="space-y-5">
+          <FormField label="البريد الإلكتروني" required>
+            <input v-model="email" type="email" dir="ltr" required class="input-premium" placeholder="example@email.com" />
+          </FormField>
+          <FormField label="كلمة المرور" required>
+            <input v-model="password" type="password" dir="ltr" required class="input-premium" placeholder="••••••••" />
+          </FormField>
+
+          <div v-if="error" class="text-red-600 text-sm bg-red-50 border border-red-200 px-4 py-3 rounded-xl flex items-center gap-2">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            {{ error }}
+          </div>
+
+          <button type="submit" class="btn-premium btn-gold w-full" :disabled="loading">
+            <span v-if="loading" class="w-4 h-4 border-2 border-navy-900/30 border-t-navy-900 rounded-full animate-spin"></span>
+            {{ loading ? 'جاري الدخول...' : 'تسجيل الدخول' }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import FormField from '@/components/ui/FormField.vue'
+import { useSession } from '@/composables/useSession'
+
+const router = useRouter()
+const session = useSession()
+
+const email = ref('')
+const password = ref('')
+const error = ref('')
+const loading = ref(false)
+
+async function handleLogin() {
+  loading.value = true
+  error.value = ''
+  try {
+    const success = await session.login(email.value, password.value)
+    if (success) {
+      if (session.needsSetup.value) {
+        router.push({ name: 'Setup' })
+      } else {
+        router.push({ name: 'Dashboard' })
+      }
+    } else {
+      error.value = 'فشل تسجيل الدخول. تحقق من بياناتك.'
+    }
+  } catch (e) {
+    error.value = 'حدث خطأ أثناء تسجيل الدخول. حاول مرة أخرى.'
+  } finally {
+    loading.value = false
+  }
+}
+</script>
