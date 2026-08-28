@@ -185,7 +185,7 @@ const statementColumns = computed(() => {
 
 const contractColumns = [
   { key: 'number', label: 'رقم العقد' },
-  { key: 'builing', label: 'العقار / الوحدة' },
+  { key: 'building', label: 'العقار / الوحدة' },
   { key: 'period', label: 'الفترة' },
   { key: 'status', label: 'الحالة' },
   { key: 'balance', label: 'الرصيد' },

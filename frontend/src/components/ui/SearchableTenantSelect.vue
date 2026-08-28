@@ -3,11 +3,15 @@
     <button
       type="button"
       class="input-premium text-right w-full flex items-center justify-between"
-      @click="open = !open"
+      :class="{ 'cursor-not-allowed opacity-50': disabled }"
+      :disabled="disabled"
+      @click="!disabled && (open = !open)"
     >
       <span :class="selectedLabel ? 'text-navy-800' : 'text-navy-400'">{{ selectedLabel || placeholder }}</span>
       <svg class="w-4 h-4 text-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
     </button>
+
+    <input v-if="required && !modelValue" type="hidden" required :value="modelValue" />
 
     <div v-if="open" class="absolute z-30 mt-1 w-full card-premium overflow-hidden">
       <div class="p-2 border-b border-ivory-300/60 relative">
@@ -55,7 +59,10 @@ import { useToast } from '@/composables/useToast'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
+  valueLabel: { type: String, default: '' },
   placeholder: { type: String, default: 'اختر المستأجر' },
+  disabled: { type: Boolean, default: false },
+  required: { type: Boolean, default: false },
   includeInactive: { type: Boolean, default: false },
   clearable: { type: Boolean, default: true },
 })
@@ -84,6 +91,9 @@ watch(open, async (v) => {
 watch(() => props.modelValue, async (v) => {
   if (!v) {
     selectedLabel.value = ''
+  } else if (props.valueLabel) {
+    // Honor explicit label from parent (source: valueLabel || value)
+    selectedLabel.value = props.valueLabel
   } else if (!selectedLabel.value) {
     // Resolve label for pre-selected value
     try {
@@ -93,6 +103,10 @@ watch(() => props.modelValue, async (v) => {
       if (found) selectedLabel.value = found.full_name
     } catch { /* ignore */ }
   }
+})
+
+watch(() => props.valueLabel, (v) => {
+  if (props.modelValue && v) selectedLabel.value = v
 })
 
 function onSearchInput() {
