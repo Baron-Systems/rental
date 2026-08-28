@@ -135,12 +135,6 @@ const routes = [
     meta: { requiresAuth: true, requiresSetup: true },
   },
   {
-    path: '/dues/:id/edit',
-    name: 'DueEdit',
-    component: () => import('@/pages/DueEditPage.vue'),
-    meta: { requiresAuth: true, requiresSetup: true },
-  },
-  {
     path: '/dues/:id',
     name: 'DueDetail',
     component: () => import('@/pages/DueDetailPage.vue'),

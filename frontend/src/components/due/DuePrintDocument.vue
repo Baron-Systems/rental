@@ -1,6 +1,6 @@
 <template>
   <div id="print-area" class="bg-white p-8" dir="rtl">
-    <PrintHeader :settings="settings" title="التزام" />
+    <PrintHeader :logo="settings?.logo" :name="settings?.name" />
     <h1 class="text-xl font-bold text-center my-6">تفاصيل التزام</h1>
     <div class="space-y-3 text-sm">
       <div class="flex justify-between border-b pb-2"><span class="text-gray-500">رقم:</span><span class="font-bold">{{ due.due_number }}</span></div>

@@ -333,8 +333,10 @@ function roundMoneySafe(value) {
 
 function getManualWaiverTotal(due) {
   const waivers = due?.waivers || []
+  // Source: contract-cancellation-settlement.service.ts:31-36 —
+  // strict status === 'active' and sourceType !== 'contract_cancellation'
   return waivers
-    .filter((w) => (w.status === 'active' || w.docstatus === 1) && (w.source_type || w.sourceType) !== 'contract_cancellation')
+    .filter((w) => w.status === 'active' && (w.source_type || w.sourceType) !== 'contract_cancellation')
     .reduce((sum, w) => sum + Number(w.amount), 0)
 }
 

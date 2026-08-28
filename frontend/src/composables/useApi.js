@@ -77,20 +77,24 @@ export function extractError(err) {
 /**
  * Format a number as currency with the given symbol (default ILS ₪).
  */
+// Source: utils.ts:53-66 formatCurrency — exact match
 export function formatMoney(amount, currency = 'ILS') {
-  if (amount === null || amount === undefined) return '—'
-  const num = Number(amount) || 0
+  if (amount === null || amount === undefined) return '-'
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount
+  if (isNaN(num)) return '-'
   const formatted = num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  const symbols = { ILS: '₪', USD: '$', EUR: '€', JOD: 'د.أ', SAR: 'ر.س', AED: 'د.إ' }
-  const sym = symbols[currency] || currency
+  // Source: utils.ts:30-35 currencySymbols — exact match, no extra currencies
+  const symbols = { ILS: '₪', USD: '$', EUR: '€', JOD: 'JD' }
+  const sym = symbols[currency] || ''
   return `${formatted} ${sym}`
 }
 
 /**
  * Format a date string (YYYY-MM-DD) to DD/MM/YYYY.
  */
+// Source: utils.ts:68-76 formatDate — returns '-' for falsy, DD/MM/YYYY format
 export function formatDate(dateStr) {
-  if (!dateStr) return '—'
+  if (!dateStr) return '-'
   const d = new Date(dateStr)
   if (isNaN(d.getTime())) return dateStr
   const day = String(d.getDate()).padStart(2, '0')

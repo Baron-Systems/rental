@@ -28,7 +28,7 @@ class RentalDue(Document):
 			prev = float(self.previous_meter_reading or 0)
 			curr = float(self.current_meter_reading)
 			if curr < prev:
-				frappe.throw(frappe._("Current meter reading cannot be less than previous reading."))
+				frappe.throw(frappe._("القراءة الحالية يجب أن تكون أكبر من أو تساوي القراءة السابقة"))
 			self.meter_consumption = round_money(curr - prev)
 			if self.unit_price:
 				self.amount = round_money(self.meter_consumption * float(self.unit_price))
@@ -47,7 +47,7 @@ class RentalDue(Document):
 	def on_cancel(self):
 		"""On cancellation: record cancellation metadata, rollback meter if metered."""
 		if not self.cancellation_reason:
-			frappe.throw(frappe._("Cancellation reason is required."))
+			frappe.throw(frappe._("سبب الإلغاء مطلوب"))
 
 		self.cancelled_by = frappe.session.user
 		self.cancelled_at = frappe.utils.now()

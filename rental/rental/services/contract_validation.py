@@ -581,28 +581,17 @@ def can_renew_contract(contract_doc) -> bool:
 		today = to_calendar_day(frappe.utils.today())
 		start = to_calendar_day(contract_doc.start_date)
 		end = to_calendar_day(contract_doc.end_date)
-		# Must be current (not upcoming)
-		if start > today:
+		# Must be current (not upcoming and not past period)
+		# Source: canRenewContract (utils.ts:189) — now < start || now > end
+		if start > today or end < today:
 			return False
-		# Must be within alert_days of end
-		alert_days = _get_contract_alert_days(contract_doc)
+		# Must be within 30 days of end (hardcoded in original)
+		# Source: canRenewContract (utils.ts:192) — daysLeft <= 30
 		days_left = (end - today).days
-		if days_left > alert_days:
+		if days_left > 30:
 			return False
 
 	return True
-
-
-def _get_contract_alert_days(contract_doc) -> int:
-	"""Return the configured alert days (default 30)."""
-	try:
-		from rental.rental.doctype.rental_settings.rental_settings import get_setting_value
-		val = get_setting_value(contract_doc.rental_account, "contract_alert_days")
-		if val:
-			return int(val)
-	except Exception:
-		pass
-	return 30
 
 
 def can_evict_contract(contract_doc) -> bool:

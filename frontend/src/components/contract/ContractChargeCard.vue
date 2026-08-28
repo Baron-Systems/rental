@@ -271,9 +271,10 @@ function isMeteredDueTypeCode(code) {
   return !!code && ['electricity', 'water'].includes(code)
 }
 
+// Source: contract-charge.service.ts:119-123 getMeterField — returns camelCase field names
 function getMeterField(code) {
-  if (code === 'electricity') return 'current_electricity_meter_reading'
-  if (code === 'water') return 'current_water_meter_reading'
+  if (code === 'electricity') return 'currentElectricityMeterReading'
+  if (code === 'water') return 'currentWaterMeterReading'
   return null
 }
 
@@ -345,12 +346,25 @@ function formatCurrencyLocal(amount) {
   return (Number(amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+// Source: contract-charge.service.ts:857-874 getFrequencyLabel — dedicated function
+function getFrequencyLabel(frequency) {
+  switch (frequency) {
+    case 'once': return 'مرة واحدة'
+    case 'monthly': return 'شهريًا'
+    case 'bi_monthly': return 'كل شهرين'
+    case 'quarterly': return 'ربع سنويًا'
+    case 'semi_annual': return 'نصف سنويًا'
+    case 'annual': return 'سنويًا'
+    default: return frequency
+  }
+}
+
 function buildServiceClauseText(charge) {
   const { due_type_name, responsibility, payment_by, calculation_method, amount, frequency, opening_meter_reading } = charge
   const name = due_type_name || chargeName.value
   const code = chargeCode.value
 
-  if (responsibility === 'tenant' && calculation_method && !isAllowedCalcMethod(code, calculation_method)) {
+  if (responsibility === 'tenant' && calculation_method && !isAllowedCalculationMethodForDueType(code, calculation_method)) {
     return null
   }
 
@@ -366,8 +380,9 @@ function buildServiceClauseText(charge) {
       switch (calculation_method) {
         case 'fixed_periodic': {
           if (!amount || !frequency) return null
-          const freqLabel = FREQUENCY_LABELS[frequency] || frequency
-          return `يلتزم المستأجر بسداد مبلغ قدره ${formatCurrencyLocal(parseFloat(String(amount).replace(/,/g, '')) || 0)} ${freqLabel} بدل ${name} للمؤجر.`
+          // Source: contract-charge.service.ts:841 — uses getFrequencyLabel function
+          const frequencyLabel = getFrequencyLabel(frequency)
+          return `يلتزم المستأجر بسداد مبلغ قدره ${formatCurrencyLocal(parseFloat(String(amount).replace(/,/g, '')) || 0)} ${frequencyLabel} بدل ${name} للمؤجر.`
         }
         case 'metered':
           return `يتحمل المستأجر تكاليف استهلاك ${name} حسب قراءة العداد، وتبلغ قراءة العداد عند بداية العقد ${opening_meter_reading || '—'}، ويُحتسب الاستهلاك وفق سعر الوحدة المعتمد وقت تسجيل الاستهلاك، ويسدد المبلغ للمؤجر.`
@@ -383,7 +398,8 @@ function buildServiceClauseText(charge) {
   }
 }
 
-function isAllowedCalcMethod(code, method) {
+// Source: contract-charge.service.ts:137-146 isAllowedCalculationMethodForDueType
+function isAllowedCalculationMethodForDueType(code, method) {
   if (!Object.values(CALCULATION_METHODS).includes(method)) return false
   if (isMeteredDueTypeCode(code)) return method !== CALCULATION_METHODS.on_demand
   return method !== CALCULATION_METHODS.metered
@@ -422,8 +438,14 @@ const FixedPeriodicPreview = defineComponent({
     currency: { type: String, default: 'ILS' },
   },
   setup(p) {
-    const analysis = computed(() => analyzeFixedPeriodicCharge(p.charge, p.endDate))
-    const schedule = computed(() => analysis.value.dues)
+    const analysis = computed(() => {
+      // Source: ContractChargesSection.tsx:203-213 — early return guards
+      if (!p.charge.amount || !p.charge.frequency || !p.charge.first_due_date || !p.endDate) return null
+      const amount = parseFloat(String(p.charge.amount).replace(/,/g, ''))
+      if (isNaN(amount) || amount <= 0) return null
+      return analyzeFixedPeriodicCharge(p.charge, p.endDate)
+    })
+    const schedule = computed(() => analysis.value?.dues || [])
     const totalAmount = computed(() => schedule.value.reduce((sum, r) => sum + r.amount, 0))
     const allEqual = computed(() => {
       if (schedule.value.length === 0) return true
@@ -431,9 +453,11 @@ const FixedPeriodicPreview = defineComponent({
       return schedule.value.every((r) => r.amount === first)
     })
     return () => {
-      if (schedule.value.length === 0) return null
+      // Source: ContractChargesSection.tsx:217 — return null if no schedule
+      if (!analysis.value || schedule.value.length === 0) return null
       const first = schedule.value[0]
       const last = schedule.value[schedule.value.length - 1]
+      const baseAmount = parseFloat(String(p.charge.amount).replace(/,/g, '')) || 0
       return h('div', { class: 'contract-table print-keep-together mt-4' }, [
         h('h4', { class: 'mb-2 font-bold text-navy-900' }, 'جدول الالتزامات الدورية'),
         h('div', { class: 'overflow-hidden rounded-lg border border-navy-200' }, [
@@ -460,13 +484,13 @@ const FixedPeriodicPreview = defineComponent({
               h('span', [`عدد الالتزامات: `, h('strong', String(schedule.value.length))]),
               allEqual.value
                 ? h('span', [`قيمة كل التزام: `, h('strong', formatMoney(first.amount, p.currency))])
-                : h('span', [`القيمة الدورية الأساسية: `, h('strong', formatMoney(parseFloat(String(p.charge.amount).replace(/,/g, '')) || 0, p.currency))]),
+                : h('span', [`القيمة الدورية الأساسية: `, h('strong', formatMoney(baseAmount, p.currency))]),
               h('span', [`إجمالي الالتزامات: `, h('strong', formatMoney(totalAmount.value, p.currency))]),
               h('span', [`أول تاريخ: `, h('strong', formatDate(first.dueDate))]),
               h('span', [`آخر تاريخ: `, h('strong', formatDate(last.dueDate))]),
             ]),
             (!allEqual.value && analysis.value.partialPeriod.exists)
-              ? h('p', { class: 'mt-1 text-xs text-amber-600' },
+              ? h('p', { class: 'mt-1 text-xs text-amber-700' },
                 `تتضمن فترة جزئية أخيرة بقيمة ${formatMoney(analysis.value.partialPeriod.amount, p.currency)}`)
               : null,
           ]),

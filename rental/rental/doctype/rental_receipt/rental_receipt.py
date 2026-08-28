@@ -45,6 +45,9 @@ class RentalReceipt(Document):
 			if not self.reference_number or not self.reference_number.strip():
 				frappe.throw(frappe._("رقم الشيك مطلوب عند اختيار طريقة الدفع شيك"))
 		else:
+			# Reject cheque fields for non-cheque method (source: validation.ts:274-282).
+			if self.reference_number or self.cheque_date or self.bank_name:
+				frappe.throw(frappe._("لا يجب إدخال بيانات شيك عند طريقة الدفع نقدًا"))
 			# B12: clear cheque fields for ANY non-cheque method (source: route.ts:76-79).
 			self.reference_number = None
 			self.cheque_date = None

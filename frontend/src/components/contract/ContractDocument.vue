@@ -17,7 +17,8 @@
       v-if="showPrintHeader && lessorData"
       class="contract-print-header print-only print-keep-together"
     >
-      <PrintHeader :lessor="lessorData" />
+      <!-- Source: ContractDocument.tsx:359 — pass logo and name separately -->
+      <PrintHeader :logo="lessorData?.logo" :name="lessorData?.name" />
     </div>
 
     <!-- Contract Title -->
@@ -261,12 +262,15 @@
         </div>
         <div class="flex items-center gap-2">
           <span class="text-sm font-medium text-navy-900">تاريخ البداية:</span>
+          <!-- Source: ContractDocument.tsx:518-529 — plain span in preview, InlineField in edit -->
+          <span v-if="isPreview" class="text-sm text-navy-900">{{ (form.startDate || form.start_date) ? formatDate(form.startDate || form.start_date) : '-' }}</span>
           <InlineField
+            v-else
             :value="form.startDate || form.start_date"
             @update:value="(v) => updateField('startDate', v)"
             placeholder="اختر تاريخ بداية العقد"
             type="date"
-            :preview="isPreview"
+            :preview="false"
             width="140px"
           />
         </div>
@@ -345,7 +349,7 @@
         :errors="errors"
         :contractStartDate="form.startDate || form.start_date || ''"
         :contractEndDate="form.endDate || form.end_date || ''"
-        :currency="lessorData?.currency || 'ILS'"
+        :currency="lessorData?.currency"
       />
     </div>
 
@@ -460,10 +464,11 @@ const form = computed(() => props.modelValue || {})
 const fetchedDueTypes = ref([])
 const dueTypes = computed(() => props.dueTypes || fetchedDueTypes.value)
 
+// Source: ContractDocument.tsx:223-228 — fetch due types if not provided as prop
 onMounted(() => {
   if (props.dueTypes) return
   callApi('rental.rental.api.settings.get_due_types', { include_system: 1, include_inactive: 0 })
-    .then((res) => { fetchedDueTypes.value = res || [] })
+    .then((res) => { fetchedDueTypes.value = res.dueTypes || res || [] })
     .catch(() => {})
 })
 
@@ -477,13 +482,14 @@ const PAYMENT_FREQUENCIES = [
   { value: 'annual', label: 'سنوي' },
 ]
 
+// Source: ContractDocument.tsx:13-16 — exact match, no extra types
 const UNIT_TYPE_LABELS = {
   apartment: 'شقة', shop: 'محل', office: 'مكتب', warehouse: 'مستودع',
   room: 'غرفة', garage: 'كراج', independent: 'عقار مستقل', other: 'أخرى',
-  villa: 'فيلا', studio: 'استوديو', building: 'مبنى',
 }
 
-const CURRENCY_LABELS = { ILS: 'شيكل', JOD: 'دينار أردني', USD: 'دولار', EUR: 'يورو', SAR: 'ريال', AED: 'درهم' }
+// Source: settings.ts:125-131 getCurrencyLabel — exact match, no extra currencies
+const CURRENCY_LABELS = { ILS: 'شيكل', JOD: 'دينار أردني', USD: 'دولار' }
 
 const commitmentTimingOptions = [
   { label: 'بداية الدورة', value: 'start' },
@@ -506,8 +512,13 @@ function getCurrencyLabel(currency) {
   return CURRENCY_LABELS[currency] || currency || ''
 }
 
+// Source: utils.ts:244-258 getFrequencyInterval — includes all aliases
 function getFrequencyMonths(freq) {
-  const map = { weekly: 0, monthly: 1, bi_monthly: 2, quarterly: 3, semi_annual: 6, annual: 12, once: 0 }
+  const map = {
+    weekly: 0, once: 0, one_time: 0,
+    monthly: 1, bi_monthly: 2, bimonthly: 2,
+    quarterly: 3, semi_annual: 6, semiannual: 6, annual: 12,
+  }
   return map[freq] ?? 0
 }
 
@@ -589,15 +600,29 @@ const chargesModel = computed({
 })
 
 // ---- Auto-calc end date & first due date ----
+// Source: ContractDocument.tsx:268-282 — clears endDate/firstDueDate when conditions missing
 watch(
-  () => [form.value.startDate || form.value.start_date, form.value.cycles, form.value.paymentFrequency || form.value.payment_frequency],
-  ([startDate, cycles, freq]) => {
-    if (!startDate || !cycles || !freq) return
-    const endDate = computeContractEndDate(startDate, freq, parseInt(cycles, 10) || 1)
-    const firstDueDate = startDate
+  () => [
+    form.value.startDate || form.value.start_date,
+    form.value.firstDueDate || form.value.first_due_date,
+    form.value.cycles,
+    form.value.paymentFrequency || form.value.payment_frequency,
+  ],
+  ([startDate, _firstDue, cycles, freq]) => {
+    let endDate = ''
+    let firstDueDate = ''
+    const cyclesNum = parseInt(cycles || '1', 10)
+
+    // Source: route.ts:274 — only compute when all conditions met
+    if (startDate && cyclesNum > 0 && freq) {
+      endDate = computeContractEndDate(startDate, freq, cyclesNum)
+      firstDueDate = startDate
+    }
+
     const currentEnd = form.value.endDate || form.value.end_date
     const currentFirstDue = form.value.firstDueDate || form.value.first_due_date
-    if (endDate !== currentEnd || firstDueDate !== currentFirstDue) {
+    // Source: route.ts:279 — update only if something changed
+    if (endDate !== currentEnd || startDate !== (form.value.startDate || form.value.start_date) || firstDueDate !== currentFirstDue) {
       emit('update:modelValue', {
         ...form.value,
         startDate,
@@ -647,8 +672,10 @@ const floorOptions = computed(() => {
     .map((f) => ({ label: f.name || f.floor_name, value: f.id || f.name }))
 })
 
-const unitStatusLabels = { empty: 'فارغة', rented: 'مؤجرة', reserved: 'محجوزة', unavailable: 'غير متاحة' }
+// Source: ContractDocument.tsx:303 — exact match, no 'unavailable' label
+const unitStatusLabels = { empty: 'فارغة', rented: 'مؤجرة', reserved: 'محجوزة' }
 
+// Source: ContractDocument.tsx:305-311 — strict equality on floorId, no OR fallback
 const unitOptions = computed(() => {
   const formBuildingId = form.value.buildingId || form.value.building
   const formFloorId = form.value.floorId || form.value.floor
@@ -656,7 +683,7 @@ const unitOptions = computed(() => {
     (u) =>
       (u.isActive !== false && u.is_active !== false && u.is_active !== 0) &&
       (u.buildingId || u.building) === formBuildingId &&
-      ((u.floorId || u.floor) === formFloorId || (!u.floorId && !u.floor && !formFloorId)) &&
+      (u.floorId || u.floor || '') === (formFloorId || '') &&
       u.status !== 'unavailable'
   )
   return available.map((u) => ({
@@ -704,8 +731,10 @@ function getPaymentSchedule(formData) {
   }))
 }
 
+// Source: ContractDocument.tsx:343 — dues || getPaymentSchedule(formData)
+// In JS, [] is truthy, so empty dues array is used as-is (no schedule shown)
 const schedule = computed(() => {
-  if (props.dues && props.dues.length > 0) return props.dues
+  if (props.dues) return props.dues
   return getPaymentSchedule(form.value)
 })
 

@@ -176,10 +176,18 @@ def create_receipt(**kwargs):
 	"""Create a draft receipt linked to a contract."""
 	account = get_current_rental_account()
 
-	if not kwargs.get("contract"):
-		frappe.throw(frappe._("العقد مطلوب"))
+	# Required-field validation (source: receiptSchema, validation.ts:245-259)
 	if not kwargs.get("tenant"):
 		frappe.throw(frappe._("المستأجر مطلوب"))
+	if not kwargs.get("contract"):
+		frappe.throw(frappe._("العقد مطلوب"))
+	if not kwargs.get("receipt_date"):
+		frappe.throw(frappe._("تاريخ السند مطلوب"))
+	if not kwargs.get("amount"):
+		frappe.throw(frappe._("المبلغ مطلوب"))
+	payment_method = kwargs.get("payment_method")
+	if payment_method not in ("cash", "cheque"):
+		frappe.throw(frappe._("طريقة الدفع غير صالحة"))
 
 	receipt_data = {
 		"doctype": "Rental Receipt",
@@ -188,7 +196,7 @@ def create_receipt(**kwargs):
 		"contract": kwargs.get("contract"),
 		"receipt_date": kwargs.get("receipt_date"),
 		"amount": kwargs.get("amount"),
-		"payment_method": kwargs.get("payment_method"),
+		"payment_method": payment_method,
 		"reference_number": kwargs.get("reference_number"),
 		"cheque_date": kwargs.get("cheque_date"),
 		"bank_name": kwargs.get("bank_name"),
@@ -218,17 +226,54 @@ def update_receipt(name, **kwargs):
 	if receipt.docstatus != 0:
 		frappe.throw(frappe._("لا يمكن تعديل إلا مسودات سند القبض"))
 
-	# Forbidden identity keys (source: route.ts:34-37)
+	# Forbidden identity keys — reject, do not silently drop (source: route.ts:34-37)
 	forbidden = ["tenant", "contract", "building", "unit", "rental_account", "receipt_number"]
 	for f in forbidden:
 		if f in kwargs:
-			del kwargs[f]
+			frappe.throw(frappe._("لا يمكن تغيير بيانات هوية السند"))
 
-	allowed = ["receipt_date", "amount", "payment_method", "reference_number",
-			   "cheque_date", "bank_name", "attachment", "notes"]
-	for field in allowed:
-		if field in kwargs and kwargs[field] is not None:
-			receipt.set(field, kwargs[field])
+	# Determine effective payment method (source: route.ts:52)
+	payment_method = kwargs.get("payment_method")
+	if payment_method is None:
+		payment_method = receipt.payment_method
+	elif payment_method not in ("cash", "cheque"):
+		frappe.throw(frappe._("طريقة الدفع غير صالحة"))
+
+	# receipt_date — only update if provided and non-empty (source: route.ts:55-57)
+	if "receipt_date" in kwargs and kwargs["receipt_date"] and str(kwargs["receipt_date"]).strip():
+		receipt.receipt_date = kwargs["receipt_date"]
+
+	# amount — only update if provided and non-empty (source: route.ts:58-60)
+	if "amount" in kwargs and kwargs["amount"] and str(kwargs["amount"]).strip():
+		receipt.amount = kwargs["amount"]
+
+	# payment_method — always set (source: route.ts:62)
+	receipt.payment_method = payment_method
+
+	# attachment — set to provided (incl. None) or keep existing (source: route.ts:63)
+	if "attachment" in kwargs:
+		receipt.attachment = kwargs["attachment"]
+
+	# notes — set to provided (incl. None) or keep existing (source: route.ts:64)
+	if "notes" in kwargs:
+		receipt.notes = kwargs["notes"]
+
+	# Cheque fields (source: route.ts:66-80)
+	if payment_method == "cheque":
+		reference_number = kwargs.get("reference_number")
+		if reference_number is None:
+			reference_number = receipt.reference_number
+		if not reference_number or not str(reference_number).strip():
+			frappe.throw(frappe._("رقم الشيك مطلوب عند اختيار طريقة الدفع شيك"))
+		receipt.reference_number = reference_number
+		if "cheque_date" in kwargs:
+			receipt.cheque_date = kwargs["cheque_date"]
+		if "bank_name" in kwargs:
+			receipt.bank_name = kwargs["bank_name"]
+	else:
+		receipt.reference_number = None
+		receipt.cheque_date = None
+		receipt.bank_name = None
 
 	receipt.save(ignore_permissions=is_system_manager())
 	return _receipt_as_dict(receipt.name)
@@ -311,7 +356,8 @@ def cancel_receipt(name, reason):
 		frappe.throw(frappe._("يمكن إلغاء السندات المعتمدة فقط"))
 
 	# Validate reason (source: cancellationSchema, validation.ts:322-324)
-	if not reason or not str(reason).strip():
+	# z.string().min(1) rejects empty/None but accepts non-empty strings incl. whitespace
+	if not reason:
 		frappe.throw(frappe._("سبب الإلغاء مطلوب"))
 
 	receipt.cancellation_reason = reason

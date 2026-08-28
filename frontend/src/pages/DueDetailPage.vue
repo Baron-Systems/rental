@@ -17,7 +17,7 @@
               <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
               طباعة
             </button>
-            <button v-if="due.status === 'draft' && (due.source_type === 'additional' || due.source_type === 'manual')" class="btn-premium btn-outline" @click="router.push(`/dues/${due.name}/edit`)">تعديل</button>
+            <button v-if="due.status === 'draft' && ['manual', 'manual_contract', 'additional'].includes(due.source_type)" class="btn-premium btn-outline" @click="toggleEdit">{{ editMode ? 'إلغاء التعديل' : 'تعديل' }}</button>
             <button v-if="due.status === 'draft'" class="btn-premium btn-gold" @click="approveDue">اعتماد</button>
             <button v-if="due.status !== 'cancelled'" class="btn-premium btn-ghost text-amber-700" @click="cancelDue">إلغاء</button>
             <button v-if="due.status === 'draft'" class="btn-premium btn-ghost text-red-600" @click="deleteDue">حذف</button>
@@ -44,13 +44,13 @@
           </Card>
         </div>
 
-        <!-- Details -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <!-- Details (view mode) -->
+        <div v-if="!editMode" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <Card padding="md">
             <template #title>تفاصيل الالتزام</template>
             <dl class="space-y-3 text-sm">
               <div class="flex justify-between"><dt class="text-navy-400">العقد</dt><dd><router-link :to="`/contracts/${due.contract}`" class="text-gold-600 hover:underline font-medium">{{ due.contract }}</router-link></dd></div>
-              <div class="flex justify-between"><dt class="text-navy-400">نوع الالتزام</dt><dd class="font-medium text-navy-800">{{ due.due_type }}</dd></div>
+              <div class="flex justify-between"><dt class="text-navy-400">نوع الالتزام</dt><dd class="font-medium text-navy-800">{{ due.due_type_name || due.due_type }}</dd></div>
               <div class="flex justify-between"><dt class="text-navy-400">المصدر</dt><dd class="font-medium text-navy-800">{{ sourceLabel(due.source_type) }}</dd></div>
               <div class="flex justify-between"><dt class="text-navy-400">طريقة الحساب</dt><dd class="font-medium text-navy-800">{{ methodLabel(due.calculation_method) }}</dd></div>
               <div class="flex justify-between" v-if="due.description"><dt class="text-navy-400">الوصف</dt><dd class="font-medium text-navy-800">{{ due.description }}</dd></div>
@@ -59,6 +59,39 @@
               <div class="flex justify-between" v-if="due.meter_consumption !== null"><dt class="text-navy-400">الاستهلاك</dt><dd class="font-medium text-navy-800">{{ due.meter_consumption }}</dd></div>
               <div class="flex justify-between" v-if="due.unit_price"><dt class="text-navy-400">سعر الوحدة</dt><dd class="font-medium text-navy-800 tabular-nums">{{ formatMoney(due.unit_price, currency) }}</dd></div>
             </dl>
+          </Card>
+        </div>
+
+        <!-- Details (edit mode) -->
+        <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <Card padding="md">
+            <template #title>تعديل الالتزام</template>
+            <form @submit.prevent="saveEdit" class="space-y-4">
+              <FormField label="المبلغ" required>
+                <input v-model.number="editForm.amount" type="number" step="0.01" required class="input-premium" />
+              </FormField>
+              <FormField label="تاريخ الاستحقاق" required>
+                <input v-model="editForm.due_date" type="date" dir="ltr" required class="input-premium" />
+              </FormField>
+              <FormField label="الوصف">
+                <input v-model="editForm.description" type="text" class="input-premium" />
+              </FormField>
+              <template v-if="due.calculation_method === 'metered'">
+                <FormField label="القراءة الحالية">
+                  <input v-model.number="editForm.current_meter_reading" type="number" step="0.01" class="input-premium" />
+                </FormField>
+                <FormField label="سعر الوحدة">
+                  <input v-model.number="editForm.unit_price" type="number" step="0.01" class="input-premium" />
+                </FormField>
+              </template>
+              <div class="flex gap-2 justify-end pt-4 border-t border-ivory-300/60">
+                <button type="button" class="btn-premium btn-outline" @click="editMode = false">إلغاء</button>
+                <button type="submit" class="btn-premium btn-gold" :disabled="savingEdit">
+                  <span v-if="savingEdit" class="w-4 h-4 border-2 border-navy-900/30 border-t-navy-900 rounded-full animate-spin"></span>
+                  حفظ
+                </button>
+              </div>
+            </form>
           </Card>
         </div>
 
@@ -138,6 +171,10 @@ const due = ref(null)
 const loading = ref(true)
 const showWaiverModal = ref(false)
 const savingWaiver = ref(false)
+const editMode = ref(false)
+const savingEdit = ref(false)
+
+const editForm = ref({ amount: null, due_date: '', description: '', current_meter_reading: null, unit_price: null })
 
 const waiverForm = ref({ amount: null, reason: '' })
 
@@ -162,6 +199,39 @@ async function fetchDue() {
   try {
     due.value = await callApi('rental.rental.api.due.get_due', { name: route.params.id })
   } catch (e) { toast.error(extractError(e)) } finally { loading.value = false }
+}
+
+function toggleEdit() {
+  if (editMode.value) {
+    editMode.value = false
+    return
+  }
+  editForm.value = {
+    amount: due.value.amount,
+    due_date: due.value.due_date || '',
+    description: due.value.description || '',
+    current_meter_reading: due.value.current_meter_reading ?? null,
+    unit_price: due.value.unit_price ?? null,
+  }
+  editMode.value = true
+}
+
+async function saveEdit() {
+  savingEdit.value = true
+  try {
+    const payload = {}
+    if (editForm.value.amount !== null) payload.amount = editForm.value.amount
+    if (editForm.value.due_date) payload.due_date = editForm.value.due_date
+    if (editForm.value.description !== undefined) payload.description = editForm.value.description
+    if (due.value.calculation_method === 'metered') {
+      if (editForm.value.current_meter_reading !== null) payload.current_meter_reading = editForm.value.current_meter_reading
+      if (editForm.value.unit_price !== null) payload.unit_price = editForm.value.unit_price
+    }
+    await callApi('rental.rental.api.due.update_due', { name: due.value.name, ...payload })
+    toast.success('تم تحديث الالتزام')
+    editMode.value = false
+    fetchDue()
+  } catch (e) { toast.error(extractError(e)) } finally { savingEdit.value = false }
 }
 
 async function approveDue() {

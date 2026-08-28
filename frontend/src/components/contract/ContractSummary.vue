@@ -167,6 +167,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { calculateContractDueSchedule, getFrequencyCount, analyzeFixedPeriodicCharge } from '@/utils/contractUtils.js'
 
 const props = defineProps({
   formData: { type: Object, required: true },
@@ -269,12 +270,15 @@ const rentSchedule = computed(() => {
   const endDate = props.formData.end_date || props.formData.endDate
   const rent = parseFloat(props.formData.rent_amount || props.formData.rentAmount) || 0
   const freq = props.formData.payment_frequency || props.formData.paymentFrequency
+  const commitmentTiming = props.formData.commitment_timing || props.formData.commitmentTiming || 'start'
   if (!baseDate || !endDate || !rent || !freq) return []
   // If dues were passed in, use them
   if (props.dues && props.dues.length > 0) return props.dues
-  // Otherwise compute a simple count-based schedule
-  // Note: full schedule computation requires backend helpers; use dues prop when available
-  return []
+  // Source: ContractSummary.tsx:99-121 — compute schedule client-side
+  const firstDue = new Date(baseDate)
+  const end = new Date(endDate)
+  const count = getFrequencyCount(firstDue, end, freq, commitmentTiming)
+  return calculateContractDueSchedule(firstDue, end, rent, freq, count, commitmentTiming)
 })
 
 const rentTotal = computed(() => rentSchedule.value.reduce((sum, s) => sum + (s.amount || 0), 0))
@@ -288,18 +292,19 @@ const fixedPeriodicItems = computed(() => {
     .filter((c) => c.responsibility === 'tenant' && c.calculation_method === 'fixed_periodic' && c.amount && c.frequency && (c.first_due_date || c.firstDueDate))
     .map((charge) => {
       const amount = parseFloat(charge.amount) || 0
-      // Analysis would require backend; expose what we have
+      // Source: ContractSummary.tsx:74-97 — use analyzeFixedPeriodicCharge
+      const analysis = analyzeFixedPeriodicCharge(charge, new Date(endDate))
       return {
         due_type_id: charge.due_type || charge.dueTypeId,
         due_type_name: charge.due_type_name || charge.dueTypeName || charge.due_type || charge.dueTypeId,
         amount,
         frequency: charge.frequency,
-        count: charge._cycle_count || 0,
-        full_total: charge._full_total || 0,
-        partial_amount: charge._partial_amount || 0,
+        count: analysis.dues.length,
+        full_total: analysis.dues.filter((d) => !d.partial).reduce((sum, d) => sum + d.amount, 0),
+        partial_amount: analysis.partialPeriod.exists ? analysis.partialPeriod.amount : 0,
         last_period_handling: charge.last_period_handling || 'none',
-        partial_period_exists: !!charge._partial_period_exists,
-        total: charge._total || 0,
+        partial_period_exists: analysis.partialPeriod.exists,
+        total: analysis.dues.reduce((sum, d) => sum + d.amount, 0),
       }
     })
 })

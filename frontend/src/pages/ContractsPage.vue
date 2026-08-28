@@ -446,8 +446,9 @@ function clearDatePeriod() {
 }
 
 function clearAllFilters() {
+  // Source: contracts/page.tsx:290-303 — reset search too
   filters.value = {
-    search: filters.value.search, // keep search
+    search: '',
     status: 'all', building: '', unit: '', tenant: '',
     contract_type: 'all', from_date: '', to_date: '', eviction: 0,
     page: 1,
@@ -771,7 +772,13 @@ async function handlePrint() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // Source: contracts/page.tsx:211-214 — expire contracts before loading list
+  try {
+    await callApi('rental.rental.api.contract.expire_contracts_api', {})
+  } catch (e) {
+    // Expire is best-effort; don't block page load
+  }
   loadBuildings()
   fetchContracts()
 })

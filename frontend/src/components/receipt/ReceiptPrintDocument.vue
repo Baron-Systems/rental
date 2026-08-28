@@ -83,7 +83,7 @@ const currencySymbol = computed(() => {
   return symbols[currency.value] || currency.value
 })
 
-const methodLabels = { cash: 'نقداً', cheque: 'شيك' }
+const methodLabels = { cash: 'نقداً', cheque: 'شيك', bank_transfer: 'تحويل بنكي', card: 'بطاقة' }
 
 const rows = computed(() => {
   const r = props.receipt

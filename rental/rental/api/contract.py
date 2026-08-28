@@ -58,11 +58,18 @@ def get_contracts(
 	to_date=None,
 	contract_type=None,
 	print=0,
-	page=1,
+	page=None,
 	limit=15,
 ):
 	"""List contracts with filters, pagination, and stats."""
 	account = get_current_rental_account()
+
+	# Source: route.ts:36-38 — date range validation
+	if from_date and to_date:
+		fd = to_calendar_day(from_date)
+		td = to_calendar_day(to_date)
+		if fd > td:
+			frappe.throw(frappe._("تاريخ البداية يجب أن يكون قبل أو يساوي تاريخ النهاية"))
 
 	filters = {}
 	if account:
@@ -141,17 +148,28 @@ def get_contracts(
 		"closed_by_renewal_at", "cancelled_at",
 	]
 
-	page_size = 0 if int(print) else int(limit)
-	start = (int(page) - 1) * int(limit) if not int(print) else 0
-
-	contracts = frappe.get_all(
-		"Lease Contract",
-		filters=filters,
-		fields=fields,
-		order_by="creation desc",
-		start=start,
-		limit_page_length=page_size,
-	)
+	# Source: route.ts:30-32,131-156 — page is undefined when print=true or not provided
+	# When page is None or print is true, return ALL contracts (no pagination)
+	page_num = int(page) if page else 0
+	if int(print) or not page_num:
+		# No pagination — return all matching contracts
+		contracts = frappe.get_all(
+			"Lease Contract",
+			filters=filters,
+			fields=fields,
+			order_by="creation desc",
+		)
+	else:
+		# Paginated
+		start = (page_num - 1) * int(limit)
+		contracts = frappe.get_all(
+			"Lease Contract",
+			filters=filters,
+			fields=fields,
+			order_by="creation desc",
+			start=start,
+			limit_page_length=int(limit),
+		)
 
 	# Enrich with tenant names, building/unit names, renewals, dues count
 	for c in contracts:
@@ -189,30 +207,26 @@ def get_contracts(
 			)
 			c["previous_contract_number"] = prev_number
 
-	# Pagination
+	# Pagination — only included when page is provided (source: route.ts:191-193)
 	total = frappe.db.count("Lease Contract", filters)
-	pagination = {
-		"page": int(page),
-		"pageSize": int(limit),
-		"total": total,
-		"totalPages": (total + int(limit) - 1) // int(limit) if int(limit) else 1,
-	}
 
-	# A24: print mode returns print.total (legacy route.ts:191-198).
+	# A24: print mode returns print.total = count of contracts (legacy route.ts:197)
 	result = {
 		"contracts": contracts,
-		"pagination": pagination,
 		"stats": _get_contract_stats(account),
 	}
 
 	if int(print):
-		from rental.rental.services.balance_service import get_active_waiver_total_for_due
-		print_total = 0
-		for c in contracts:
-			# Sum rent_amount for printed contracts (legacy sums amount for non-cancelled dues;
-			# for contracts list, legacy returns total of rent_amount).
-			print_total += float(c.get("rent_amount") or 0)
-		result["print"] = {"total": round(print_total, 2)}
+		result["print"] = {"total": total}
+
+	# Source: route.ts:191-193 — pagination only when page is provided (not print)
+	if page_num and not int(print):
+		result["pagination"] = {
+			"page": int(page),
+			"pageSize": int(limit),
+			"total": total,
+			"totalPages": (total + int(limit) - 1) // int(limit) if int(limit) else 1,
+		}
 
 	return result
 
@@ -259,11 +273,18 @@ def get_contract(name):
 
 	result = contract.as_dict()
 
-	# Add lessor data
+	# Add lessor data — strip logo (source: route.ts:60-62)
 	from rental.rental.doctype.rental_settings.rental_settings import get_lessor_data, parse_lessor_snapshot
-	result["lessor"] = get_lessor_data(contract.rental_account)
+	lessor = get_lessor_data(contract.rental_account)
+	# Source: route.ts:62 — do not send heavy base64 logo in detail response
+	if isinstance(lessor, dict) and "logo" in lessor:
+		lessor = {k: v for k, v in lessor.items() if k != "logo"}
+	result["lessor"] = lessor
 	if contract.lessor_snapshot:
-		result["lessor_snapshot"] = parse_lessor_snapshot(contract.lessor_snapshot)
+		snapshot = parse_lessor_snapshot(contract.lessor_snapshot)
+		if isinstance(snapshot, dict) and "logo" in snapshot:
+			snapshot = {k: v for k, v in snapshot.items() if k != "logo"}
+		result["lessor_snapshot"] = snapshot
 
 	# Enrich tenant object
 	if contract.tenant:
@@ -304,7 +325,7 @@ def get_contract(name):
 			result["unit"] = unit
 			result["unit_number"] = unit.unit_number
 
-	# Add dues
+	# Add dues — ordered by transactionDate asc (source: route.ts:39)
 	dues = frappe.get_all(
 		"Rental Due",
 		filters={"contract": name},
@@ -312,27 +333,51 @@ def get_contract(name):
 				"transaction_date", "due_date", "period_label", "period_start", "period_end",
 				"amount", "docstatus", "previous_meter_reading", "current_meter_reading",
 				"meter_consumption", "unit_price", "cancelled_at", "is_system_cancelled"],
-		order_by="due_date asc",
+		order_by="transaction_date asc",
 	)
-	# Enrich due_type_name for each due
+	# Enrich due_type_name and waivers for each due
 	for d in dues:
 		if d.get("due_type"):
 			dt = frappe.db.get_value("Rental Due Type", d["due_type"], ["due_type_name", "due_type_code"], as_dict=True)
 			if dt:
 				d["due_type_name"] = dt.due_type_name
 				d["due_type_code"] = dt.due_type_code
+		# Source: route.ts:37 — include waivers
+		d["waivers"] = frappe.get_all(
+			"Rental Due Waiver",
+			filters={"due": d["name"]},
+			fields=["name", "amount", "status"],
+		)
 	result["dues"] = dues
 
-	# Add receipts
+	# Add receipts — ordered by receiptDate asc (source: route.ts:43)
 	receipts = frappe.get_all(
 		"Rental Receipt",
 		filters={"contract": name},
 		fields=["name", "receipt_number", "receipt_date", "amount",
 				"payment_method", "reference_number", "docstatus",
 				"cancelled_at", "cancelled_by", "notes"],
-		order_by="receipt_date desc",
+		order_by="receipt_date asc",
 	)
 	result["receipts"] = receipts
+
+	# Add attachments — ordered by createdAt desc (source: route.ts:45-48)
+	attachments = frappe.get_all(
+		"Contract Attachment",
+		filters={"parent": name, "parenttype": "Lease Contract"},
+		fields=["name", "file_name", "file_type", "creation"],
+		order_by="creation desc",
+	)
+	result["attachments"] = attachments
+
+	# Add evictions — ordered by createdAt desc (source: route.ts:49-52)
+	evictions = frappe.get_all(
+		"Rental Eviction",
+		filters={"contract": name},
+		fields=["name", "eviction_date", "notes"],
+		order_by="creation desc",
+	)
+	result["evictions"] = evictions
 
 	# Add renewals (contracts renewed from this one)
 	renewals = frappe.get_all(
@@ -493,11 +538,12 @@ def update_contract(name, **kwargs):
 		frappe.throw(frappe._("لا يمكن تعديل العقد بعد الاعتماد"))
 
 	# Renewal drafts cannot change fixed fields (tenant/building/unit/dates)
+	# Source: route.ts:128-137 — reject with 409, do NOT silently delete
 	if contract.renewed_from_contract:
 		forbidden = ["tenant", "building", "unit", "first_due_date", "start_date", "renewed_from_contract"]
 		for f in forbidden:
-			if f in kwargs:
-				del kwargs[f]
+			if f in kwargs and kwargs[f] is not None:
+				frappe.throw(frappe._("لا يمكن تعديل البيانات الثابتة لتجديد العقد"))
 
 	# Update allowed fields
 	# Non-renewal drafts may change tenant/building/unit; renewal drafts forbid it above.
@@ -578,6 +624,10 @@ def approve_contract(name, generate_dues=0):
 		frappe.throw(frappe._("العقد ليس مسودة"))
 
 	# Full validation (all checks before any writes)
+	# Source: approve/route.ts:44-47 — date validation runs BEFORE full validation
+	from rental.rental.services.contract_validation import validate_contract_date_for_approval
+	validate_contract_date_for_approval(contract)
+
 	validate_contract_for_approval(contract)
 
 	# Validate lessor data is complete
@@ -593,7 +643,16 @@ def approve_contract(name, generate_dues=0):
 	# Freeze lessor snapshot
 	snapshot = build_lessor_snapshot(account)
 
-	generate_dues_flag = bool(int(generate_dues))
+	# Source: approve/route.ts:29 — generateDues === true (strict boolean)
+	# Handle both boolean and string/integer representations from frontend
+	if isinstance(generate_dues, bool):
+		generate_dues_flag = generate_dues
+	elif isinstance(generate_dues, (int, float)):
+		generate_dues_flag = bool(int(generate_dues))
+	elif isinstance(generate_dues, str):
+		generate_dues_flag = generate_dues.lower() == "true"
+	else:
+		generate_dues_flag = False
 
 	# A1: Both rent and fixed-periodic dues run only when
 	# `generateDues || periodStatus !== 'past'` (legacy approve route.ts:97).
@@ -695,13 +754,25 @@ def cancel_contract(name, cancellation_date, reason=None):
 		frappe.throw(frappe._("العقد ملغي مسبقاً"))
 	if contract.status in ("expired", "evicted"):
 		frappe.throw(frappe._("لا يمكن إلغاء عقد منتهٍ أو تم إخلاؤه"))
+
+	# Source: cancel/route.ts:34-40 — only APPROVED renewals block cancellation
+	# (not drafts). Uses isApprovedRenewal which excludes draft/cancelled/evicted.
+	from rental.rental.services.renewal_service import is_approved_renewal
+	renewals = frappe.get_all(
+		"Lease Contract",
+		filters={"renewed_from_contract": name},
+		pluck="name",
+	)
+	if any(is_approved_renewal(r) for r in renewals):
+		frappe.throw(frappe._("لا يمكن إلغاء العقد لوجود تجديد معتمد؛ يجب إلغاء التجديد أولاّ"))
+
+	# Source: cancel/route.ts:42-44 — status !== 'active' check comes AFTER renewal check
 	if contract.status != "active":
 		frappe.throw(frappe._("لا يمكن إلغاء عقد غير نشط"))
 
-	# Check no approved renewal
-	from rental.rental.services.renewal_service import has_non_cancelled_renewal
-	if has_non_cancelled_renewal(name):
-		frappe.throw(frappe._("لا يمكن إلغاء العقد لوجود تجديد معتمد؛ يجب إلغاء التجديد أولاّ"))
+	# Source: cancel/route.ts:46-49 — cancellationDate presence check
+	if not cancellation_date:
+		frappe.throw(frappe._("تاريخ الإلغاء مطلوب"))
 
 	# Cancellation date must be within [startDate, endDate]
 	cancel_date = to_calendar_day(cancellation_date)
@@ -710,18 +781,20 @@ def cancel_contract(name, cancellation_date, reason=None):
 	if cancel_date < start or cancel_date > end:
 		frappe.throw(frappe._("تاريخ الإلغاء خارج فترة العقد"))
 
-	# Update contract status — use the user-provided cancellation_date as cancelled_at
+	# Update contract status — use the normalized cancel_date as cancelled_at
+	# Source: cancel/route.ts:64-71 — cancelledAt: cancellationDate (normalized)
 	frappe.db.set_value("Lease Contract", name, {
 		"status": "cancelled",
-		"cancelled_at": cancellation_date,
+		"cancelled_at": cancel_date,
 		"cancellation_reason": reason,
 	}, update_modified=False)
 
-	# Create cancellation settlement
+	# Create cancellation settlement — pass normalized cancel_date
+	# Source: cancel/route.ts:73-81 — cancellationDate is the normalized date
 	from rental.rental.services.contract_cancellation_settlement_service import (
 		create_contract_cancellation_settlement,
 	)
-	settlement_name = create_contract_cancellation_settlement(name, cancellation_date, reason or "", account)
+	settlement_name = create_contract_cancellation_settlement(name, cancel_date, reason or "", account)
 
 	# Recalculate unit status
 	recalculate_unit_status(contract.unit)
@@ -766,17 +839,22 @@ def renew_contract(name, **kwargs):
 	from rental.rental.utils.date_utils import add_days
 	start_date = add_days(previous.end_date, 1)
 
-	# End date must be provided by the caller (source: route.ts:44)
-	end_date = kwargs.get("end_date")
-	if not end_date:
-		frappe.throw(frappe._("تاريخ النهاية مطلوب"))
+	# Source: route.ts:44 — endDate defaults to startDate if not provided
+	end_date_input = kwargs.get("end_date")
+	end_date = end_date_input if end_date_input else start_date
 
 	# Validate end > start (source: route.ts:48-50)
 	from rental.rental.utils.date_utils import validate_dates
 	if not validate_dates(start_date, end_date):
 		frappe.throw(frappe._("تاريخ النهاية يجب أن يكون بعد تاريخ البداية"))
 
+	# Source: route.ts:45-46 — rentAmount defaults to previous, paymentFrequency defaults to previous
+	rent_amount_input = kwargs.get("rent_amount")
+	rent_amount = float(rent_amount_input) if rent_amount_input else float(previous.rent_amount)
+	payment_frequency = kwargs.get("payment_frequency") or previous.payment_frequency
+
 	# Create renewal draft
+	# Source: route.ts:72-89 — optional fields default to null, NOT previous values
 	renewal_data = {
 		"doctype": "Lease Contract",
 		"rental_account": account,
@@ -785,14 +863,18 @@ def renew_contract(name, **kwargs):
 		"unit": previous.unit,
 		"start_date": start_date,
 		"end_date": end_date,
-		"rent_amount": kwargs.get("rent_amount", previous.rent_amount),
-		"payment_frequency": kwargs.get("payment_frequency", previous.payment_frequency),
-		"commitment_timing": kwargs.get("commitment_timing", previous.commitment_timing or "start"),
-		"payment_method": kwargs.get("payment_method", previous.payment_method),
+		"rent_amount": rent_amount,
+		"payment_frequency": payment_frequency,
+		# Source: route.ts:83 — commitmentTiming || 'start'
+		"commitment_timing": kwargs.get("commitment_timing") or "start",
+		# Source: route.ts:82 — paymentMethod ?? null
+		"payment_method": kwargs.get("payment_method"),
+		# Source: route.ts:86 — contractDate ? new Date(contractDate) : null
 		"contract_date": kwargs.get("contract_date"),
 		"first_due_date": start_date,
-		"terms": kwargs.get("terms", previous.terms),
-		"witnesses": kwargs.get("witnesses", previous.witnesses),
+		# Source: route.ts:84-85 — terms || null, witnesses || null
+		"terms": kwargs.get("terms") or None,
+		"witnesses": kwargs.get("witnesses") or None,
 		"status": "draft",
 		"renewed_from_contract": name,
 	}
@@ -841,7 +923,14 @@ def unarchive_contract_api(name):
 
 @frappe.whitelist()
 def get_contract_balance_api(name):
-	"""Get contract balance."""
+	"""Get contract balance.
+
+	Source: ``GET /api/contracts/[id]/balance``.
+	Returns 404 if contract does not exist (source: route.ts:14-21).
+	"""
+	# Source: route.ts:14-21 — contract existence check
+	if not frappe.db.exists("Lease Contract", name):
+		frappe.throw(frappe._("العقد غير موجود"))
 	from rental.rental.services.balance_service import get_contract_balance
 	return get_contract_balance(name)
 
@@ -904,12 +993,19 @@ def get_contract_due_types(name):
 
 @frappe.whitelist()
 def get_previous_reading(name, due_type=None):
-	"""Get previous meter reading for a contract/due_type."""
+	"""Get previous meter reading for a contract/due_type.
+
+	Source: ``GET /api/contracts/[id]/previous-reading``.
+	"""
 	contract = frappe.get_doc("Lease Contract", name)
 	contract.check_permission("read")
 
 	if not due_type:
 		frappe.throw(frappe._("نوع الالتزام مطلوب"))
+
+	# Source: previous-reading/route.ts:26-28 — unit presence check
+	if not contract.unit:
+		frappe.throw(frappe._("العقد لا يحتوي على وحدة"))
 
 	reading = get_previous_meter_reading(name, contract.unit, due_type)
 	return {"previous_meter_reading": reading}
@@ -941,12 +1037,30 @@ def get_cancellation_settlement(contract=None, name=None):
 		return None
 
 	settlement = frappe.get_doc("Contract Cancellation Settlement", settlement_name).as_dict()
-	settlement_items = settlement.get("settlement_items", []) or settlement.get("items", [])
+	# Source: contracts/[id]/route.ts:64-77 — unresolvedCount = approved auto-contract dues
+	# with periodStart or periodEnd null
+	unresolved_count = frappe.db.count(
+		"Rental Due",
+		filters={
+			"contract": contract_name,
+			"source_type": "auto_contract",
+			"docstatus": 1,
+			"period_start": ["is", "not set"],
+		},
+	) + frappe.db.count(
+		"Rental Due",
+		filters={
+			"contract": contract_name,
+			"source_type": "auto_contract",
+			"docstatus": 1,
+			"period_end": ["is", "not set"],
+		},
+	)
 	return {
 		"id": settlement_name,
 		"name": settlement_name,
 		"status": settlement.get("status") or "pending",
-		"unresolved_count": sum(1 for it in settlement_items if it.get("status") != "decided"),
+		"unresolved_count": unresolved_count,
 	}
 
 
@@ -957,7 +1071,12 @@ def get_cancellation_settlement(contract=None, name=None):
 
 @frappe.whitelist()
 def get_contract_settlement(name):
-	"""Get cancellation settlement for a contract."""
+	"""Get cancellation settlement for a contract.
+
+	Source: ``GET /api/contracts/[id]/settlement``.
+	- totals is null when no settlement (source: route.ts:55)
+	- unresolvedDues checks OR periodStart null OR periodEnd null (source: route.ts:36)
+	"""
 	contract = frappe.get_doc("Lease Contract", name)
 	contract.check_permission("read")
 
@@ -965,13 +1084,49 @@ def get_contract_settlement(name):
 		"Contract Cancellation Settlement", {"contract": name}, "name"
 	)
 	if not settlement_name:
-		return {"settlement": None, "unresolved_dues": [], "totals": {}}
+		# Source: route.ts:55 — totals is null when no settlement
+		return {"settlement": None, "unresolved_dues": [], "totals": None}
 
 	settlement = frappe.get_doc("Contract Cancellation Settlement", settlement_name).as_dict()
 
-	# Get unresolved dues
-	from rental.rental.services.contract_cancellation_settlement_service import _get_unresolved_dues
-	unresolved = _get_unresolved_dues(name, settlement_name)
+	# Source: route.ts:31-45 — unresolved dues: auto_contract, approved, periodStart OR periodEnd null
+	unresolved_dues = frappe.get_all(
+		"Rental Due",
+		filters={
+			"contract": name,
+			"source_type": "auto_contract",
+			"docstatus": 1,
+			"period_start": ["is", "not set"],
+		},
+		fields=["name", "due_number", "due_date", "due_type"],
+		order_by="due_date asc",
+	)
+	# Also check period_end null (OR condition)
+	unresolved_dues_end = frappe.get_all(
+		"Rental Due",
+		filters={
+			"contract": name,
+			"source_type": "auto_contract",
+			"docstatus": 1,
+			"period_end": ["is", "not set"],
+		},
+		fields=["name", "due_number", "due_date", "due_type"],
+		order_by="due_date asc",
+	)
+	# Merge and deduplicate
+	seen = set()
+	unresolved = []
+	for d in unresolved_dues + unresolved_dues_end:
+		if d.name not in seen:
+			seen.add(d.name)
+			dt_name = frappe.db.get_value("Rental Due Type", d.due_type, "due_type_name") if d.due_type else None
+			unresolved.append({
+				"dueId": d.name,
+				"dueNumber": d.due_number,
+				"dueType": dt_name,
+				"dueDate": d.due_date,
+				"blockingReason": "Missing periodStart or periodEnd",
+			})
 
 	# Totals (source: route.ts:55-65) — match original camelCase field names
 	items = settlement.get("settlement_items", []) or settlement.get("items", [])
@@ -1064,11 +1219,16 @@ def add_attachment(name, attachments=None):
 		import json
 		attachments = json.loads(attachments)
 
+	# Source: route.ts:31-33 — attachments must be an array
+	if not isinstance(attachments, list):
+		frappe.throw(frappe._("المرفقات يجب أن تكون مصفوفة"))
+
 	created = []
 	for att in attachments:
+		# Source: route.ts:48-49 — defaults: fileName='صورة', fileType='image'
 		contract.append("contract_attachments", {
-			"file_name": att.get("file_name"),
-			"file_type": att.get("file_type"),
+			"file_name": att.get("file_name") or "صورة",
+			"file_type": att.get("file_type") or "image",
 			"file_data": att.get("file_data"),
 		})
 
@@ -1109,10 +1269,16 @@ def delete_attachment(name=None, attachment_id=None, contract=None, attachment=N
 		frappe.throw(frappe._("لا يمكن حذف مرفقات عقد مؤرشف"))
 
 	# Remove the attachment row
+	found = False
 	for i, att in enumerate(contract_doc.contract_attachments):
 		if att.name == attachment_name:
 			contract_doc.contract_attachments.pop(i)
+			found = True
 			break
+
+	# Source: attachments/[attachmentId]/route.ts:28-47 — throw if not found
+	if not found:
+		frappe.throw(frappe._("المرفق غير موجود"))
 
 	contract_doc.save(ignore_permissions=is_system_manager())
 	return {"success": True}

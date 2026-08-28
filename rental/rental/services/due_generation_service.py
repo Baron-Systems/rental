@@ -99,9 +99,17 @@ def ensure_system_due_types() -> None:
 
 
 def get_rent_due_type() -> str:
-	"""Return the name of the rent DueType."""
+	"""Return the name of the rent DueType.
+
+	Source: ``generateContractDues`` (due-generation.service.ts:33-39) —
+	looks up by ``isSystem: true, isActive: true, code: 'rent'``.
+	"""
 	ensure_system_due_types()
-	name = frappe.db.get_value("Rental Due Type", {"due_type_code": "rent"}, "name")
+	name = frappe.db.get_value(
+		"Rental Due Type",
+		{"due_type_code": "rent", "is_system": 1, "is_active": 1},
+		"name",
+	)
 	if not name:
 		frappe.throw(frappe._("Rent due type not found"))
 	return name
@@ -193,7 +201,7 @@ def create_due_from_schedule(contract_doc, charge, schedule_item, account, calcu
 		period_label=schedule_item["period_label"],
 		amount=schedule_item["amount"],
 		calculation_method=calculation_method,
-		description=f"{frappe.db.get_value('Rental Due Type', charge.due_type, 'due_type_name')} - {schedule_item['period_label']}",
+		description=f"{frappe.db.get_value('Rental Due Type', charge.due_type, 'due_type_name')} {schedule_item['period_label']}",
 	)
 
 

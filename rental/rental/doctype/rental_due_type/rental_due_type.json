@@ -22,7 +22,8 @@
   {
    "fieldname": "due_type_code",
    "fieldtype": "Data",
-   "label": "Due Type Code"
+   "label": "Due Type Code",
+   "unique": 1
   },
   {
    "default": "0",

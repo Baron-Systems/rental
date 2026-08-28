@@ -340,13 +340,17 @@ async function handleEditSubmit() {
       receipt_date: editForm.receiptDate,
       amount: editForm.amount,
       payment_method: editForm.paymentMethod,
-      notes: editForm.notes || undefined,
-      attachment: editForm.attachment || undefined,
+      notes: editForm.notes || null,
+      attachment: editForm.attachment,
     }
     if (editForm.paymentMethod === 'cheque') {
       payload.reference_number = editForm.referenceNumber
-      payload.cheque_date = editForm.chequeDate || undefined
-      payload.bank_name = editForm.bankName || undefined
+      payload.cheque_date = editForm.chequeDate || null
+      payload.bank_name = editForm.bankName || null
+    } else {
+      payload.reference_number = null
+      payload.cheque_date = null
+      payload.bank_name = null
     }
     const res = await callApi('rental.rental.api.receipt.update_receipt', { name: receipt.value.name, ...payload })
     receipt.value = res

@@ -1,6 +1,6 @@
 <template>
   <div class="print-document" dir="rtl">
-    <PrintHeader :title="'كشف حساب المستأجر'" :subtitle="scopeHeader" :lessor="lessor" />
+    <PrintHeader :logo="lessor?.logo" :name="lessor?.name" />
 
     <!-- Tenant info -->
     <div class="tenant-info">

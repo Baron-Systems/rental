@@ -83,7 +83,7 @@ const props = defineProps({
 
 const currency = computed(() => props.lessorData?.currency || 'ILS')
 
-const methodLabels = { cash: 'نقداً', cheque: 'شيك' }
+const methodLabels = { cash: 'نقداً', cheque: 'شيك', bank_transfer: 'تحويل بنكي', card: 'بطاقة' }
 const statusLabels = { draft: 'مسودة', approved: 'معتمد', cancelled: 'ملغي' }
 
 const showTotalAmount = computed(() => {

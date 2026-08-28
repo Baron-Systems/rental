@@ -295,81 +295,10 @@ def build_fixed_periodic_schedule(charge, contract_end_date) -> list[dict]:
 	``last_period_adjustment_amount``.
 
 	Source: ``buildFixedPeriodicSchedule`` in ``src/lib/utils.ts``.
+	Delegates to ``analyze_fixed_periodic_charge`` and returns its ``dues``,
+	matching the original's ``return analyzeFixedPeriodicCharge(charge, endDate).dues``.
 	"""
-	f = normalise_frequency(charge.get("frequency"))
-	amount = float(charge.get("amount") or 0)
-	start = to_calendar_day(charge.get("first_due_date"))
-	contract_end = to_calendar_day(contract_end_date)
-	commitment_timing = charge.get("commitment_timing") or "start"
-	last_handling = charge.get("last_period_handling") or "none"
-	last_adj = float(charge.get("last_period_adjustment_amount") or 0)
-
-	months = get_frequency_months(f)
-	anchor_day = start.day
-	period_start = start
-	schedule: list[dict] = []
-	index = 0
-
-	while True:
-		next_boundary = add_calendar_months(period_start, months, anchor_day=anchor_day)
-		period_end = previous_calendar_day(next_boundary)
-
-		if period_start > contract_end:
-			break
-
-		if period_end <= contract_end:
-			# Full cycle
-			due_date = period_start if commitment_timing == "start" else period_end
-			schedule.append({
-				"index": index,
-				"due_date": due_date,
-				"period_start": period_start,
-				"period_end": period_end,
-				"amount": amount,
-				"period_label": _fixed_periodic_label(period_start, period_end),
-			})
-		else:
-			# Partial last period
-			if last_handling == "none":
-				pass  # skip
-			elif last_handling == "prorated":
-				# Legacy: fullPeriodDays = max(1, calendarDayDiff(partialStart, nextBoundary))
-				#         partialDays   = max(0, calendarDayDiff(partialStart, end))
-				# calendar_day_diff(a, b) = b - a, so:
-				#   full_days   = nextBoundary - partialStart = (period_end + 1) - period_start
-				#   partial_days = end - partialStart (exclusive of end, no +1)
-				full_days = calendar_day_diff(period_start, period_end) + 1
-				if full_days < 1:
-					full_days = 1
-				partial_days = calendar_day_diff(period_start, contract_end)
-				if partial_days < 0:
-					partial_days = 0
-				prorated = round_money(amount * partial_days / full_days)
-				due_date = period_start if commitment_timing == "start" else contract_end
-				schedule.append({
-					"index": index,
-					"due_date": due_date,
-					"period_start": period_start,
-					"period_end": contract_end,
-					"amount": prorated,
-					"period_label": _fixed_periodic_label(period_start, contract_end),
-				})
-			elif last_handling == "manual":
-				due_date = period_start if commitment_timing == "start" else contract_end
-				schedule.append({
-					"index": index,
-					"due_date": due_date,
-					"period_start": period_start,
-					"period_end": contract_end,
-					"amount": last_adj,
-					"period_label": _fixed_periodic_label(period_start, contract_end),
-				})
-			break
-
-		index += 1
-		period_start = next_boundary
-
-	return schedule
+	return analyze_fixed_periodic_charge(charge, contract_end_date)["dues"]
 
 
 def calculate_contract_end_date(start_date, frequency: str, cycles: int) -> date:
@@ -412,9 +341,13 @@ def format_date(d) -> str:
 # ---------------------------------------------------------------------------
 
 
-def generate_number(prefix: str, counter: int) -> str:
-	"""Generate a zero-padded number: ``prefix-0001``."""
-	return f"{prefix}-{counter + 1:04d}"
+def generate_number(prefix: str, counter: int, separator: str = "-") -> str:
+	"""Generate a zero-padded number.
+
+	Source: contract number uses ``${prefix}-${counter.padStart(4)}`` (dash),
+	while due/receipt numbers use ``${prefix}${counter.padStart(4)}`` (no dash).
+	"""
+	return f"{prefix}{separator}{counter + 1:04d}"
 
 
 # ---------------------------------------------------------------------------
@@ -499,8 +432,10 @@ def analyze_fixed_periodic_charge(charge, contract_end_date) -> dict:
 	manual_amount = float(charge.get("last_period_adjustment_amount") or 0)
 	is_end_timing = charge.get("commitment_timing") == "end"
 
-	# Single-period services (once/weekly): single due at start or end
-	if months == 0 and f not in ("monthly", "bi_monthly", "quarterly", "semi_annual", "annual"):
+	# Single-period services (once/one_time): interval.months === 0 && interval.days === 0
+	# Source: utils.ts:450 — if (interval.months === 0 && interval.days === 0)
+	days = get_frequency_days(f)
+	if months == 0 and days == 0:
 		due_date = end if is_end_timing else start
 		return {
 			"full_cycles": [],
@@ -539,22 +474,10 @@ def analyze_fixed_periodic_charge(charge, contract_end_date) -> dict:
 		period_start = next_boundary
 
 	full_cycle_count = len(full_cycles)
-	partial_start = add_calendar_months(start, months * full_cycle_count, anchor_day=anchor_day) if full_cycle_count else start
-	# Recompute partial_start properly
-	if full_cycle_count:
-		partial_start = add_calendar_months(start, months * full_cycle_count, anchor_day=anchor_day)
-	else:
-		partial_start = start
-	partial_exists = partial_start <= end and partial_start != start
-
-	# Actually partial exists only if there's a remaining period after full cycles
-	# that is shorter than a full cycle
-	if full_cycle_count:
-		last_full_end = full_cycles[-1]["end_date"]
-		partial_start = add_calendar_months(last_full_end, 1, anchor_day=anchor_day)
-		partial_exists = partial_start <= end
-	else:
-		partial_exists = False
+	# Source: utils.ts:497-501 — partialStart = addCalendarMonths(start, fullCycleCount * months, anchorDay)
+	partial_start = add_calendar_months(start, months * full_cycle_count, anchor_day=anchor_day)
+	# Source: utils.ts:501 — partialExists = partialStart < end (strict less-than)
+	partial_exists = partial_start < end
 
 	settlement_amount = 0
 	if partial_exists:
@@ -612,9 +535,6 @@ def analyze_fixed_periodic_charge(charge, contract_end_date) -> dict:
 # ---------------------------------------------------------------------------
 # Available fixed-periodic frequencies  (source: getAvailableFixedPeriodicFrequencies)
 # ---------------------------------------------------------------------------
-
-
-FIXED_PERIODIC_FREQUENCIES = ["monthly", "bi_monthly", "quarterly", "semi_annual", "annual"]
 
 
 def get_available_fixed_periodic_frequencies(

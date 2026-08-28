@@ -265,7 +265,8 @@ def generate_due_number(account: str) -> str:
 
 	prefix = settings.due_prefix or "DUE"
 	counter = settings.due_counter or 0
-	number = generate_number(prefix, counter)
+	# Source: contract-charge.service.ts:547 — no dash separator for due numbers
+	number = generate_number(prefix, counter, separator="")
 
 	settings.due_counter = counter + 1
 	settings.db_update()
@@ -287,12 +288,13 @@ def generate_receipt_number(account: str) -> str:
 
 	# B6: retry loop for uniqueness (legacy lines 14-26).
 	for _attempt in range(100):
-		number = generate_number(prefix, counter)
+		# Source: receipts/[id]/approve/route.ts:15 — no dash separator for receipt numbers
+		number = generate_number(prefix, counter, separator="")
 		if not frappe.db.exists("Rental Receipt", {"receipt_number": number}):
 			break
 		counter += 1
 	else:
-		frappe.throw(frappe._("تعذر توليد رقم إيصال فريد بعد 100 محاولة."))
+		frappe.throw(frappe._("تعذر توليد رقم سند قبض فريد. يرجى المحاولة مرة أخرى."))
 
 	settings.receipt_counter = counter + 1
 	settings.db_update()

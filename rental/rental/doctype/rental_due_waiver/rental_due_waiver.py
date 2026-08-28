@@ -27,11 +27,11 @@ class RentalDueWaiver(Document):
 				as_dict=True,
 			)
 			if not due:
-				frappe.throw(frappe._("Linked due does not exist."))
+				frappe.throw(frappe._("الالتزام غير موجود"))
 			if due.source_type != "auto_contract":
-				frappe.throw(frappe._("Waivers can only be created for auto-contract dues."))
+				frappe.throw(frappe._("لا يمكن إعفاء إلا الالتزامات الناتجة من العقود"))
 			if due.docstatus != 1:
-				frappe.throw(frappe._("Waivers can only be created for approved dues."))
+				frappe.throw(frappe._("لا يمكن إعفاء إلا التزامات معتمدة"))
 
 			# Sum of active waivers cannot exceed due amount
 			if self.is_new() or self.status == "active":
@@ -46,12 +46,8 @@ class RentalDueWaiver(Document):
 				)
 				total = float(existing_waivers) + float(self.amount or 0)
 				if total > float(due.amount):
-					frappe.throw(
-						frappe._("Total waivers ({0}) cannot exceed due amount ({1}).").format(
-							total, due.amount
-						)
-					)
+					frappe.throw(frappe._("إجمالي الإعفاءات لا يجوز أن يتجاوز مبلغ الالتزام"))
 
 		# Amount must be positive
 		if not self.amount or float(self.amount) <= 0:
-			frappe.throw(frappe._("Waiver amount must be greater than zero."))
+			frappe.throw(frappe._("مبلغ الإعفاء يجب أن يكون أكبر من صفر"))

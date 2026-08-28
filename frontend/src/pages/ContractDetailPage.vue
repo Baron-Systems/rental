@@ -443,8 +443,9 @@ const isApprovedHistoricalLocal = computed(() => {
 // ---- Waiver helpers ----
 function activeWaiverTotal(due) {
   const waivers = due.waivers || []
+  // Source: [id]/page.tsx:94-97 — strict status === 'active'
   return waivers
-    .filter((w) => (w.status || w.docstatus) === 'active' || (w.docstatus === 1 && w.status !== 'cancelled'))
+    .filter((w) => w.status === 'active')
     .reduce((sum, w) => sum + Number(w.amount), 0)
 }
 
@@ -469,6 +470,12 @@ function dueDisplayStatus(d) {
 async function fetchContract() {
   loading.value = true
   try {
+    // Source: [id]/page.tsx:141-145 — expire contracts before fetching
+    try {
+      await callApi('rental.rental.api.contract.expire_contracts_api', {})
+    } catch (e) {
+      // Expire is best-effort; don't block page load
+    }
     contract.value = await callApi('rental.rental.api.contract.get_contract', { name: route.params.id })
     // Fetch balance, dues, receipts, settlement in parallel
     const promises = []

@@ -79,6 +79,20 @@ def settle_item(settlement_id=None, item_id=None, decision=None, gross_settled_a
 	Accepts both ``item_id`` and ``item`` parameter names for frontend compatibility.
 	If ``settlement_id`` is not provided, it is inferred from the item.
 	"""
+	# Source: items/[itemId]/route.ts:6 — VALID_DECISIONS
+	VALID_DECISIONS = ["keep_full", "prorated", "manual_settlement", "full_waiver"]
+	if decision not in VALID_DECISIONS:
+		frappe.throw(frappe._("قرار التسوية غير صالح"))
+
+	# Source: items/[itemId]/route.ts:19-22 — grossSettledAmount validation
+	if gross_settled_amount is not None:
+		try:
+			gross_settled_amount = float(gross_settled_amount)
+		except (TypeError, ValueError):
+			frappe.throw(frappe._("المبلغ الإجمالي يجب أن يكون أكبر من أو يساوي صفر"))
+		if gross_settled_amount < 0:
+			frappe.throw(frappe._("المبلغ الإجمالي يجب أن يكون أكبر من أو يساوي صفر"))
+
 	item_name = item_id or item
 	if not item_name:
 		frappe.throw(frappe._("معرف عنصر التسوية مطلوب"))
@@ -88,9 +102,6 @@ def settle_item(settlement_id=None, item_id=None, decision=None, gross_settled_a
 		settlement_id = frappe.db.get_value("Cancellation Settlement Item", item_name, "parent")
 	if not settlement_id:
 		frappe.throw(frappe._("تعذر تحديد التسوية لعنصر التسوية"))
-
-	if gross_settled_amount is not None:
-		gross_settled_amount = float(gross_settled_amount)
 
 	settle_contract_cancellation_item(
 		settlement_id, item_name, decision, gross_settled_amount, reason

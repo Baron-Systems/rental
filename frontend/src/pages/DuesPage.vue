@@ -4,11 +4,12 @@
       <PageHeader title="الالتزامات" description="إدارة الالتزامات المالية للمستأجرين" action-label="إضافة التزام" @action="showCreateForm = !showCreateForm" />
 
       <!-- Stats -->
-      <div v-if="stats" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div v-if="stats" class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <StatCard label="إجمالي الالتزامات" :value="stats.total || 0" icon="receipt" color="navy" />
         <StatCard label="مسودات" :value="stats.draft || 0" icon="receipt" color="amber" />
-        <StatCard label="معتمدة" :value="stats.approved || 0" icon="receipt" color="green" />
-        <StatCard label="ملغاة" :value="stats.cancelled || 0" icon="receipt" color="red" />
+        <StatCard label="مستحق حتى اليوم" :value="stats.due || 0" icon="receipt" color="green" />
+        <StatCard label="مستقبلي" :value="stats.future || 0" icon="receipt" color="blue" />
+        <StatCard label="ملغي" :value="stats.cancelled || 0" icon="receipt" color="red" />
       </div>
 
       <!-- Inline create form -->
@@ -48,6 +49,39 @@
             <button type="button" class="btn-premium btn-outline" @click="showCreateForm = false">إلغاء</button>
             <button type="submit" class="btn-premium btn-gold" :disabled="creating">
               <span v-if="creating" class="w-4 h-4 border-2 border-navy-900/30 border-t-navy-900 rounded-full animate-spin"></span>
+              حفظ
+            </button>
+          </div>
+        </form>
+      </Card>
+
+      <!-- Inline edit modal -->
+      <Card v-if="editingDue" padding="lg" class="mb-4 animate-slide-up">
+        <template #title>تعديل التزام</template>
+        <form @submit.prevent="saveEdit" class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField label="المبلغ" required>
+              <input v-model.number="editForm.amount" type="number" step="0.01" required class="input-premium" />
+            </FormField>
+            <FormField label="تاريخ الاستحقاق" required>
+              <input v-model="editForm.due_date" type="date" dir="ltr" required class="input-premium" />
+            </FormField>
+            <FormField label="الوصف">
+              <input v-model="editForm.description" type="text" class="input-premium" />
+            </FormField>
+            <template v-if="editingDue.calculation_method === 'metered'">
+              <FormField label="القراءة الحالية">
+                <input v-model.number="editForm.current_meter_reading" type="number" step="0.01" class="input-premium" />
+              </FormField>
+              <FormField label="سعر الوحدة">
+                <input v-model.number="editForm.unit_price" type="number" step="0.01" class="input-premium" />
+              </FormField>
+            </template>
+          </div>
+          <div class="flex gap-2 justify-end">
+            <button type="button" class="btn-premium btn-outline" @click="editingDue = null">إلغاء</button>
+            <button type="submit" class="btn-premium btn-gold" :disabled="savingEdit">
+              <span v-if="savingEdit" class="w-4 h-4 border-2 border-navy-900/30 border-t-navy-900 rounded-full animate-spin"></span>
               حفظ
             </button>
           </div>
@@ -115,7 +149,7 @@
                 <button v-if="d.status === 'approved'" class="w-8 h-8 rounded-lg flex items-center justify-center text-amber-600 hover:bg-amber-50 transition-colors" title="إلغاء" @click="cancelDue(d)">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
-                <button v-if="d.status === 'draft' && d.due_kind === 'additional'" class="w-8 h-8 rounded-lg flex items-center justify-center text-gold-600 hover:bg-gold-50 transition-colors" title="تعديل" @click="router.push(`/dues/${d.name}/edit`)">
+                <button v-if="d.status === 'draft' && ['manual', 'manual_contract', 'additional'].includes(d.source_type)" class="w-8 h-8 rounded-lg flex items-center justify-center text-gold-600 hover:bg-gold-50 transition-colors" title="تعديل" @click="startEdit(d)">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                 </button>
                 <button v-if="d.status === 'draft'" class="w-8 h-8 rounded-lg flex items-center justify-center text-red-600 hover:bg-red-50 transition-colors" title="حذف" @click="deleteDue(d)">
@@ -180,6 +214,39 @@ const filters = ref({ search: '', status: '', sourceType: '', fromDate: '', toDa
 const printing = ref(false)
 
 const newDue = ref({ contract: '', due_type: '', amount: null, due_date: '', description: '', due_kind: 'contractual' })
+
+const editingDue = ref(null)
+const editForm = ref({ amount: null, due_date: '', description: '', current_meter_reading: null, unit_price: null })
+const savingEdit = ref(false)
+
+function startEdit(d) {
+  editingDue.value = d
+  editForm.value = {
+    amount: d.amount,
+    due_date: d.due_date || '',
+    description: d.description || '',
+    current_meter_reading: d.current_meter_reading ?? null,
+    unit_price: d.unit_price ?? null,
+  }
+}
+
+async function saveEdit() {
+  savingEdit.value = true
+  try {
+    const payload = {}
+    if (editForm.value.amount !== null) payload.amount = editForm.value.amount
+    if (editForm.value.due_date) payload.due_date = editForm.value.due_date
+    if (editForm.value.description !== undefined) payload.description = editForm.value.description
+    if (editingDue.value.calculation_method === 'metered') {
+      if (editForm.value.current_meter_reading !== null) payload.current_meter_reading = editForm.value.current_meter_reading
+      if (editForm.value.unit_price !== null) payload.unit_price = editForm.value.unit_price
+    }
+    await callApi('rental.rental.api.due.update_due', { name: editingDue.value.name, ...payload })
+    toast.success('تم تحديث الالتزام')
+    editingDue.value = null
+    fetchDues(pagination.value?.page || 1)
+  } catch (e) { toast.error(extractError(e)) } finally { savingEdit.value = false }
+}
 
 let debounceTimer = null
 function debouncedFetch() { clearTimeout(debounceTimer); debounceTimer = setTimeout(fetchDues, 400) }
@@ -271,7 +338,7 @@ async function handlePrint() {
       print: 1, limit: 1000,
     })
     const dues = res.dues || []
-    const printTotal = res.print?.total || null
+    const printTotal = res.print?.totalAmount || null
     const printWin = window.open('', '_blank')
     printWin.document.write(`<html dir="rtl"><head><title>قائمة الالتزامات</title></head><body>`)
     printWin.document.write(`<h1>قائمة الالتزامات</h1>`)

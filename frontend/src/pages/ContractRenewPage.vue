@@ -184,8 +184,10 @@ function validate() {
   if (!form.value.cycles || parseInt(form.value.cycles, 10) <= 0) {
     newErrors.cycles = 'عدد الدورات مطلوب'
   }
-  if (!form.value.rentAmount || parseFloat(form.value.rentAmount) <= 0) {
+  if (!form.value.rentAmount) {
     newErrors.rentAmount = 'قيمة الإيجار مطلوبة'
+  } else if (parseFloat(form.value.rentAmount) <= 0) {
+    newErrors.rentAmount = 'قيمة الإيجار يجب أن تكون أكبر من صفر'
   }
   if (form.value.firstDueDate && form.value.endDate) {
     const firstDue = new Date(form.value.firstDueDate)

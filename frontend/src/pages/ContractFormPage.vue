@@ -331,8 +331,11 @@ function validate() {
   if (!isEdit.value && (!form.value.cycles || parseInt(form.value.cycles, 10) <= 0)) {
     newErrors.cycles = 'عدد الدورات مطلوب'
   }
-  if (!form.value.rentAmount || parseFloat(form.value.rentAmount) <= 0) {
+  if (!form.value.rentAmount) {
     newErrors.rentAmount = 'قيمة الإيجار مطلوبة'
+  } else if (parseFloat(form.value.rentAmount) <= 0) {
+    // Source: validation.ts:168-172 — separate message for non-positive rent
+    newErrors.rentAmount = 'قيمة الإيجار يجب أن تكون أكبر من صفر'
   }
   // Edit mode requires end date (source: edit/page.tsx:150)
   if (isEdit.value && !form.value.endDate) {
@@ -392,9 +395,9 @@ async function saveNew(asDraft) {
     if (asDraft) {
       router.push({ name: 'ContractDetail', params: { id: contractName } })
     } else {
-      // Check if past contract — needs dues choice
-      const isPast = form.value.startDate && new Date(form.value.startDate) < new Date()
-      if (isPast) {
+      // Source: new/page.tsx:145-153 — use server response requiresDuesChoice
+      const requiresDuesChoice = result.requires_dues_choice || result.requiresDuesChoice
+      if (requiresDuesChoice) {
         pendingContractId.value = contractName
         showDuesDialog.value = true
         saving.value = false

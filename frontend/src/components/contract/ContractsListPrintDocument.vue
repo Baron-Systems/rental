@@ -1,6 +1,6 @@
 <template>
   <div id="print-area" class="contracts-list-print-document print-document bg-white p-8" dir="rtl">
-    <PrintHeader :lessor="lessorData" />
+    <PrintHeader :logo="lessorData?.logo" :name="lessorData?.name" />
 
     <!-- Title + filter summary -->
     <div class="print-keep-together border-b-2 border-navy-300 pb-4 mb-6">

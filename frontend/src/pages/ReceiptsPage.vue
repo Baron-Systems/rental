@@ -706,13 +706,17 @@ async function handleSubmit() {
       receipt_date: formData.receiptDate,
       amount: formData.amount,
       payment_method: formData.paymentMethod,
-      notes: formData.notes || undefined,
-      attachment: formData.attachment || undefined,
+      notes: formData.notes || null,
+      attachment: formData.attachment,
     }
     if (formData.paymentMethod === 'cheque') {
       payload.reference_number = formData.referenceNumber
-      payload.cheque_date = formData.chequeDate || undefined
-      payload.bank_name = formData.bankName || undefined
+      payload.cheque_date = formData.chequeDate || null
+      payload.bank_name = formData.bankName || null
+    } else {
+      payload.reference_number = null
+      payload.cheque_date = null
+      payload.bank_name = null
     }
     await callApi('rental.rental.api.receipt.create_receipt', payload)
     // Reset form

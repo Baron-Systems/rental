@@ -189,8 +189,10 @@ export function getFrequencyMonths(frequency) {
     weekly: 0,
     monthly: 1,
     bi_monthly: 2,
+    bimonthly: 2,
     quarterly: 3,
     semi_annual: 6,
+    semiannual: 6,
     annual: 12,
   }
   return map[frequency] ?? 0
@@ -202,9 +204,11 @@ export function getFrequencyInterval(frequency) {
     case 'once':
     case 'one_time': return { months: 0, days: 0 }
     case 'monthly': return { months: 1, days: 0 }
-    case 'bi_monthly': return { months: 2, days: 0 }
+    case 'bi_monthly':
+    case 'bimonthly': return { months: 2, days: 0 }
     case 'quarterly': return { months: 3, days: 0 }
-    case 'semi_annual': return { months: 6, days: 0 }
+    case 'semi_annual':
+    case 'semiannual': return { months: 6, days: 0 }
     case 'annual': return { months: 12, days: 0 }
     default: return { months: 0, days: 0 }
   }
@@ -289,6 +293,21 @@ export function buildPeriodicSchedule(options) {
 export function getFrequencyCount(startDate, endDate, frequency, commitmentTiming = 'start') {
   const schedule = buildPeriodicSchedule({ startDate, endDate, frequency, commitmentTiming, amount: 0 })
   return Math.max(0, schedule.length)
+}
+
+/**
+ * Calculate the rent payment schedule for a contract.
+ * Source: utils.ts:597 calculateContractDueSchedule
+ */
+export function calculateContractDueSchedule(baseDate, endDate, rentAmount, paymentFrequency, count, commitmentTiming) {
+  return buildPeriodicSchedule({
+    startDate: baseDate,
+    endDate,
+    frequency: paymentFrequency,
+    commitmentTiming,
+    amount: rentAmount,
+    maxCount: count,
+  })
 }
 
 /**

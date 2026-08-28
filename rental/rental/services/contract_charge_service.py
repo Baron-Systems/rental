@@ -472,11 +472,9 @@ def generate_fixed_periodic_dues(contract_doc, account: str) -> int:
 			continue
 
 		# Source: contract-charge.service.ts:529-532 — skip if due type is inactive
+		# Original uses console.warn (not user-facing); we skip silently to match.
 		dt_active = frappe.db.get_value("Rental Due Type", charge.due_type, "is_active")
-		if dt_active is False or dt_active == 0:
-			frappe.msgprint(
-				frappe._("تخطي الالتزامات الدورية الثابتة لنوع التزام غير فعال: {0}").format(charge.due_type)
-			)
+		if not dt_active:
 			continue
 
 		schedule = build_fixed_periodic_schedule({

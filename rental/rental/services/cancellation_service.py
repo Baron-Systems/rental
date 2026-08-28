@@ -19,15 +19,15 @@ def cancel_due(due_name: str, reason: str, cancelled_by: str):
 	  otherwise roll back to the previous approved reading, or to the
 	  contract charge's opening_meter_reading if none.
 	"""
-	# Check due exists (legacy line 12)
+	# Check due exists (legacy line 12, cancel/route.ts:32)
 	if not frappe.db.exists("Rental Due", due_name):
-		frappe.throw(frappe._("Due not found"))
+		frappe.throw(frappe._("الالتزام غير موجود"), frappe.DoesNotExistError)
 
 	due = frappe.get_doc("Rental Due", due_name)
 
-	# Check not already cancelled (legacy line 13)
+	# Check not already cancelled (legacy line 13, cancel/route.ts:33)
 	if due.docstatus == 2:
-		frappe.throw(frappe._("Due already cancelled"))
+		frappe.throw(frappe._("الالتزام ملغي مسبقاُ"))
 
 	# Only manual source types can be cancelled (legacy line 14)
 	if due.source_type not in ("manual", "manual_contract", "additional"):

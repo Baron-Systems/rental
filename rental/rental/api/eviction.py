@@ -18,6 +18,10 @@ def create_eviction(contract, notes=None):
 	Only accepts ``contract`` and ``notes`` — matching the original API.
 	Eviction date is auto-set to today by the doctype validate method.
 	"""
+	# Source: evictions/route.ts:13-15 — contractId is required
+	if not contract:
+		frappe.throw(frappe._("العقد مطلوب"))
+
 	account = get_current_rental_account()
 
 	# Check contract exists

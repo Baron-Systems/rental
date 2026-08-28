@@ -1,7 +1,7 @@
 
 <template>
   <div class="print-document" dir="rtl">
-    <PrintHeader :title="'تقرير المستأجرين'" :subtitle="filterSummary" :lessor="lessor" />
+    <PrintHeader :logo="lessor?.logo" :name="lessor?.name" />
 
     <table class="print-table">
       <thead>

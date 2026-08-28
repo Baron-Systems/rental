@@ -171,6 +171,10 @@ def _system_cancel_due_and_waivers(due_name: str, reason: str) -> None:
 	if not due_doc or due_doc.docstatus == 2:
 		return
 
+	# Set cancellation_reason BEFORE cancel() so on_cancel hook passes.
+	# The original directly updates the due without hooks; we must satisfy
+	# the on_cancel validation that requires cancellation_reason.
+	due_doc.cancellation_reason = reason
 	due_doc.cancel()
 	frappe.db.set_value("Rental Due", due_name, {
 		"is_system_cancelled": 1,

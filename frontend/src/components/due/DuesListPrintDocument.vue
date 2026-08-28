@@ -1,6 +1,6 @@
 <template>
   <div id="print-area" class="bg-white p-8" dir="rtl">
-    <PrintHeader :settings="settings" title="قائمة الالتزامات" />
+    <PrintHeader :logo="settings?.logo" :name="settings?.name" />
     <h1 class="text-xl font-bold text-center my-6">قائمة الالتزامات</h1>
     <table class="w-full text-sm border border-gray-200">
       <thead class="bg-gray-50">
