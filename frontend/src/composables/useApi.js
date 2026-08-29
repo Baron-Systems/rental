@@ -52,6 +52,12 @@ function cleanError(raw) {
 
 /**
  * Extract a user-friendly Arabic error message from a Frappe error.
+ *
+ * ``frappeRequest`` (from frappe-ui) parses Frappe's ``_server_messages``
+ * string into an ``err.messages`` array of already-extracted message strings.
+ * It does NOT set ``err._server_messages`` on the Error object, so we must
+ * check ``err.messages`` first (matching the old program's behaviour where
+ * ``data.error`` contained the user-facing Arabic message directly).
  */
 export function extractError(err) {
   if (!err) return 'حدث خطأ غير متوقع'
@@ -59,8 +65,12 @@ export function extractError(err) {
 
   let raw = null
 
-  // Frappe sends user-facing messages in _server_messages first
-  if (err._server_messages && Array.isArray(err._server_messages) && err._server_messages.length) {
+  // frappeRequest sets `err.messages` (array of parsed message strings)
+  if (err.messages && Array.isArray(err.messages) && err.messages.length) {
+    raw = err.messages[0]
+  }
+
+  if (!raw && err._server_messages && Array.isArray(err._server_messages) && err._server_messages.length) {
     try {
       const first = JSON.parse(err._server_messages[0])
       raw = first.message || first

@@ -732,9 +732,11 @@ function getPaymentSchedule(formData) {
 }
 
 // Source: ContractDocument.tsx:343 — dues || getPaymentSchedule(formData)
-// In JS, [] is truthy, so empty dues array is used as-is (no schedule shown)
+// In the old program, `dues` is undefined for new contracts, so it falls through
+// to getPaymentSchedule. In the new program, `dues` is initialized as [] (empty
+// array) which is truthy in JS. We must check length > 0 to fall through correctly.
 const schedule = computed(() => {
-  if (props.dues) return props.dues
+  if (props.dues && props.dues.length > 0) return props.dues
   return getPaymentSchedule(form.value)
 })
 

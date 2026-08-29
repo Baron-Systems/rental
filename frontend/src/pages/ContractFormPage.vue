@@ -227,7 +227,7 @@ async function loadContract() {
     const c = res.contract || res
     if (c) {
       previousContractNumber.value = c.previous_contract_number || c.previousContract?.contractNumber || ''
-      const loadedUnit = units.value.find((u) => u.name === c.unit || u.uu.id === c.unitId)
+      const loadedUnit = units.value.find((u) => u.name === c.unit || u.name === c.unitId)
       form.value = {
         contractNumber: c.contract_number || c.contractNumber || '',
         contractDate: (c.contract_date || c.contractDate || '').slice(0, 10),
