@@ -689,7 +689,7 @@ const unitOptions = computed(() => {
   return available.map((u) => ({
     label: `${u.unitNumber || u.unit_number} — ${unitStatusLabels[u.status] || u.status || ''}`,
     value: u.id || u.name,
-    meta: u.floor?.name || u.unitType || u.unit_type || '',
+    meta: u.floor?.name || unitTypeLabel(u.unitType || u.unit_type) || '',
   }))
 })
 

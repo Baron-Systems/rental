@@ -128,6 +128,7 @@ import { callApi, extractError } from '@/composables/useApi'
 import { useSession } from '@/composables/useSession'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
+import { getFrequencyCount } from '@/utils/contractUtils.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -236,7 +237,13 @@ async function loadContract() {
         rentAmount: String(c.rent_amount ?? c.rentAmount ?? ''),
         paymentFrequency: c.payment_frequency || c.paymentFrequency || 'monthly',
         firstDueDate: (c.first_due_date || c.firstDueDate || '').slice(0, 10),
-        cycles: c.cycles != null ? String(c.cycles) : '1',
+        // Source: contracts/[id]/edit/page.tsx:104-109 — calculate cycles from dates + frequency
+        cycles: (() => {
+          const firstDue = new Date(c.first_due_date || c.firstDueDate || c.start_date || c.startDate)
+          const end = new Date(c.end_date || c.endDate)
+          const freq = c.payment_frequency || c.paymentFrequency || 'monthly'
+          return String(Math.max(1, getFrequencyCount(firstDue, end, freq)))
+        })(),
         paymentMethod: c.payment_method || c.paymentMethod || '',
         commitmentTiming: c.commitment_timing || c.commitmentTiming || 'start',
         contractCharges: (c.contract_charges || c.contractCharges || []).map((charge) => ({
