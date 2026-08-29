@@ -714,7 +714,7 @@ async function handleAttachmentUpload(files) {
     // Reload
     openAttachmentsModal({ name: attachmentsContractId.value, status: attachmentsContractStatus.value, is_archived: attachmentsContractArchived.value })
   } catch (e) {
-    toast.error('حدث خطأ أثناء رفع الصور')
+    toast.error(extractError(e))
   }
 }
 
@@ -727,7 +727,7 @@ async function handleAttachmentDelete(attachment) {
     })
     attachmentsList.value = attachmentsList.value.filter((a) => (a.name || a.id) !== (attachment.name || attachment.id))
   } catch (e) {
-    toast.error('حدث خطأ أثناء حذف الصور')
+    toast.error(extractError(e))
   }
 }
 

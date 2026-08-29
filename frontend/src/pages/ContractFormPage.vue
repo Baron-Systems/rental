@@ -186,7 +186,7 @@ async function loadInitialData() {
       callApi('rental.rental.api.tenant.get_tenants', { limit: 500 }).catch(() => ({ tenants: [] })),
       callApi('rental.rental.api.property.get_buildings', { simple: 1, include_inactive: 1, limit: 500 }).catch(() => []),
       callApi('rental.rental.api.property.get_floors', { limit: 500 }).catch(() => ({ floors: [] })),
-      callApi('rental.rental.api.property.get_units', { limit: 500 }).catch(() => ({ units: [] })),
+      callApi('rental.rental.api.property.get_units', { include_inactive: 1, limit: 500 }).catch(() => ({ units: [] })),
       callApi('rental.rental.api.settings.get_due_types', { include_system: 1, include_inactive: 0 }).catch(() => []),
     ])
     tenants.value = tenantsRes.tenants || tenantsRes || []
@@ -205,16 +205,11 @@ async function loadContract() {
     // For new contracts, fetch default contract number and terms
     try {
       const settingsRes = await callApi('rental.rental.api.settings.get_settings').catch(() => ({}))
-      const settings = settingsRes.settings || settingsRes || []
-      const getVal = (key) => {
-        const raw = Array.isArray(settings) ? settings.find((x) => x.setting_key === key || x.settingKey === key) : null
-        const v = raw?.setting_value ?? raw?.settingValue
-        return typeof v === 'object' && v !== null ? v.value : v
-      }
-      const prefix = getVal('contract_prefix') || 'CNT'
-      const counter = getVal('contract_counter') || 1
+      const s = settingsRes || {}
+      const prefix = s.contract_prefix || 'CNT'
+      const counter = s.contract_counter || 1
       const nextNum = String(counter).padStart(4, '0')
-      const defaultTerms = getVal('default_contract_terms') || ''
+      const defaultTerms = s.default_contract_terms || ''
       form.value.contractNumber = `${prefix}-${nextNum}`
       form.value.terms = defaultTerms
     } catch { /* ignore */ }
@@ -226,21 +221,22 @@ async function loadContract() {
     const res = await callApi('rental.rental.api.contract.get_contract', { name: route.params.id })
     const c = res.contract || res
     if (c) {
-      previousContractNumber.value = c.previous_contract_number || c.previousContract?.contractNumber || ''
-      const loadedUnit = units.value.find((u) => u.name === c.unit || u.name === c.unitId)
+      previousContractNumber.value = c.previous_contract_number || c.previousContract?.contract_number || c.previousContract?.contractNumber || c.previousContract?.name || ''
+      const unitIdValue = c.unit?.name || c.unitId || (typeof c.unit === 'string' ? c.unit : '')
+      const loadedUnit = units.value.find((u) => u.name === unitIdValue || u.unit_number === c.unit_number)
       form.value = {
         contractNumber: c.contract_number || c.contractNumber || '',
         contractDate: (c.contract_date || c.contractDate || '').slice(0, 10),
-        tenantId: c.tenant || c.tenantId || '',
-        buildingId: c.building || c.buildingId || '',
+        tenantId: c.tenant?.name || c.tenantId || (typeof c.tenant === 'string' ? c.tenant : ''),
+        buildingId: c.building?.name || c.buildingId || (typeof c.building === 'string' ? c.building : ''),
         floorId: loadedUnit?.floor || loadedUnit?.floorId || '',
-        unitId: c.unit || c.unitId || '',
+        unitId: unitIdValue,
         startDate: (c.start_date || c.startDate || '').slice(0, 10),
         endDate: (c.end_date || c.endDate || '').slice(0, 10),
         rentAmount: String(c.rent_amount ?? c.rentAmount ?? ''),
         paymentFrequency: c.payment_frequency || c.paymentFrequency || 'monthly',
         firstDueDate: (c.first_due_date || c.firstDueDate || '').slice(0, 10),
-        cycles: String(c.cycles || '1'),
+        cycles: c.cycles != null ? String(c.cycles) : '1',
         paymentMethod: c.payment_method || c.paymentMethod || '',
         commitmentTiming: c.commitment_timing || c.commitmentTiming || 'start',
         contractCharges: (c.contract_charges || c.contractCharges || []).map((charge) => ({
@@ -433,13 +429,13 @@ async function saveEdit() {
     const payload = buildPayload()
     // For renewal, don't send tenant/building/unit/start
     if (isRenewal.value) {
-      delete payload.tenantId
-      delete payload.buildingId
-      delete payload.floorId
-      delete payload.unitId
-      delete payload.firstDueDate
-      delete payload.startDate
-      delete payload.renewedFromContractId
+      delete payload.tenant_id
+      delete payload.building_id
+      delete payload.floor_id
+      delete payload.unit_id
+      delete payload.first_due_date
+      delete payload.start_date
+      delete payload.renewed_from_contract_id
     }
     await callApi('rental.rental.api.contract.update_contract', { name: route.params.id, ...payload })
     router.push({ name: 'ContractDetail', params: { id: route.params.id } })

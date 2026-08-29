@@ -629,8 +629,8 @@ async function handleLogoUpload(e) {
     })
     const data = await res.json()
     form.value.logo = data.message.file_url
-  } catch {
-    toast.error('فشل رفع الشعار')
+  } catch (e) {
+    toast.error(extractError(e))
   }
 }
 

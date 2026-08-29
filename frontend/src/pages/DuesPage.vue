@@ -98,7 +98,6 @@
           <select v-model="filters.status" class="input-premium" @change="fetchDues">
             <option value="">كل الحالات</option>
             <option value="draft">مسودة</option>
-            <option value="approved">معتمد</option>
             <option value="due">مستحق</option>
             <option value="future">مستقبلي</option>
             <option value="cancelled">ملغي</option>

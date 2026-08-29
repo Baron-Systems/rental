@@ -125,10 +125,11 @@ async function loadData() {
     }
     contract.value = c
     // Ensure the contract's unit is in the list even if inactive (source: preview/page.tsx)
-    let loadedUnit = units.value.find((u) => u.name === c.unit || u.id === c.unitId)
-    if (!loadedUnit && c.unit) {
+    const unitIdValue = c.unit?.name || c.unitId || (typeof c.unit === 'string' ? c.unit : '')
+    let loadedUnit = units.value.find((u) => u.name === unitIdValue || u.unit_number === c.unit_number)
+    if (!loadedUnit && unitIdValue) {
       try {
-        const unitDoc = await callApi('rental.rental.api.property.get_unit', { name: c.unit })
+        const unitDoc = await callApi('rental.rental.api.property.get_unit', { name: unitIdValue })
         if (unitDoc) {
           units.value = [...units.value, unitDoc]
           loadedUnit = unitDoc
@@ -144,10 +145,10 @@ async function loadData() {
     formData.value = {
       contractNumber: c.contract_number || c.contractNumber || '',
       contractDate: (c.contract_date || c.contractDate || '').slice(0, 10),
-      tenantId: c.tenant || c.tenantId || '',
-      buildingId: c.building || c.buildingId || '',
+      tenantId: c.tenant?.name || c.tenantId || (typeof c.tenant === 'string' ? c.tenant : ''),
+      buildingId: c.building?.name || c.buildingId || (typeof c.building === 'string' ? c.building : ''),
       floorId: loadedUnit?.floor || loadedUnit?.floorId || c.unit?.floor || '',
-      unitId: c.unit || c.unitId || '',
+      unitId: unitIdValue,
       startDate: (c.start_date || c.startDate || '').slice(0, 10),
       endDate: (c.end_date || c.endDate || '').slice(0, 10),
       rentAmount: String(c.rent_amount ?? c.rentAmount ?? ''),

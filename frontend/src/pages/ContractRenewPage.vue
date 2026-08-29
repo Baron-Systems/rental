@@ -215,7 +215,7 @@ async function loadOriginal() {
       callApi('rental.rental.api.tenant.get_tenants', { limit: 500 }).catch(() => ({ tenants: [] })),
       callApi('rental.rental.api.property.get_buildings', { simple: 1, include_inactive: 1, limit: 500 }).catch(() => []),
       callApi('rental.rental.api.property.get_floors', { limit: 500 }).catch(() => ({ floors: [] })),
-      callApi('rental.rental.api.property.get_units', { limit: 500 }).catch(() => ({ units: [] })),
+      callApi('rental.rental.api.property.get_units', { include_inactive: 1, limit: 500 }).catch(() => ({ units: [] })),
       callApi('rental.rental.api.settings.get_due_types', { include_system: 1, include_inactive: 0 }).catch(() => []),
       callApi('rental.rental.api.contract.get_contract', { name: route.params.id }),
     ])
@@ -238,7 +238,8 @@ async function loadOriginal() {
     firstDue.setDate(firstDue.getDate() + 1)
     const firstDueStr = firstDue.toISOString().split('T')[0]
 
-    const loadedUnit = units.value.find((u) => u.name === c.unit || u.id === c.unitId)
+    const unitIdValue = c.unit?.name || c.unitId || (typeof c.unit === 'string' ? c.unit : '')
+    const loadedUnit = units.value.find((u) => u.name === unitIdValue || u.unit_number === c.unit_number)
 
     // Calculate cycles from original contract (source: renew/page.tsx:89)
     const cycles = String(Math.max(1, getFrequencyCount(new Date(c.start_date || c.startDate), new Date(c.end_date || c.endDate), c.payment_frequency || c.paymentFrequency || 'monthly')))
@@ -246,10 +247,10 @@ async function loadOriginal() {
     form.value = {
       contractNumber: '',
       contractDate: new Date().toISOString().split('T')[0],
-      tenantId: c.tenant || c.tenantId || '',
-      buildingId: c.building || c.buildingId || '',
+      tenantId: c.tenant?.name || c.tenantId || (typeof c.tenant === 'string' ? c.tenant : ''),
+      buildingId: c.building?.name || c.buildingId || (typeof c.building === 'string' ? c.building : ''),
       floorId: loadedUnit?.floor || loadedUnit?.floorId || '',
-      unitId: c.unit || c.unitId || '',
+      unitId: unitIdValue,
       startDate: firstDueStr,
       endDate: '',
       rentAmount: String(c.rent_amount ?? c.rentAmount ?? ''),

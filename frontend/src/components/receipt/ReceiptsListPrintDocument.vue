@@ -137,15 +137,15 @@ function getCellContent(key, r, index) {
     case 'date':
       return formatDate(r.receipt_date || r.receiptDate)
     case 'tenant':
-      return r.tenant_name || r.tenant?.fullName || '—'
+      return r.tenant_name || r.tenant?.full_name || r.tenant?.fullName || '—'
     case 'buildingUnit': {
-      const buildingName = r.building_name || r.building?.name || ''
-      const unitNumber = r.unit_number || (r.unit?.unitNumber ? `وحدة ${r.unit.unitNumber}` : '')
+      const buildingName = r.building_name || r.building?.building_name || r.building?.name || ''
+      const unitNumber = r.unit_number || (r.unit?.unit_number ? `وحدة ${r.unit.unit_number}` : '') || (r.unit?.unitNumber ? `وحدة ${r.unit.unitNumber}` : '')
       const location = [buildingName, unitNumber].filter(Boolean).join(' — ')
       return location || '—'
     }
     case 'contract':
-      return r.contract_number || r.contract?.contractNumber || '—'
+      return r.contract_number || r.contract?.contract_number || r.contract?.contractNumber || '—'
     case 'amount':
       return formatMoney(r.amount, currency.value)
     case 'paymentMethod':

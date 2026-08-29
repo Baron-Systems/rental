@@ -32,11 +32,11 @@
                 </span>
                 <span class="flex items-center gap-1">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-                  {{ contract.building_name || contract.building?.name || '—' }}
+                  {{ contract.building_name || contract.building?.building_name || contract.building?.name || '—' }}
                 </span>
                 <span class="flex items-center gap-1">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-                  {{ contract.unit_number || contract.unit?.unitNumber || '—' }}
+                  {{ contract.unit_number || contract.unit?.unit_number || contract.unit?.unitNumber || '—' }}
                 </span>
               </div>
               <div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-navy-400">
@@ -105,7 +105,7 @@
             <div class="mb-4">
               <p class="font-semibold text-navy-900">
                 {{ item.due?.due_type_name || item.due?.dueType?.name || item.due_type_name || '—' }}
-                — {{ item.due?.due_number || item.due?.dueNumber || item.due_id || item.id }}
+                — {{ item.due?.due_number || item.due?.dueNumber || item.due_id || item.name }}
               </p>
               <p class="text-xs text-navy-400 mt-0.5">
                 <template v-if="item.due?.period_start && item.due?.period_end">
@@ -288,7 +288,7 @@ import Card from '@/components/ui/Card.vue'
 import DataTable from '@/components/ui/DataTable.vue'
 import TableRow from '@/components/ui/TableRow.vue'
 import TableCell from '@/components/ui/TableCell.vue'
-import { callApi, formatMoney, formatDate } from '@/composables/useApi'
+import { callApi, formatMoney, formatDate, extractError } from '@/composables/useApi'
 import { useSession } from '@/composables/useSession'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
@@ -371,7 +371,7 @@ async function loadData() {
       settlementData.value = null
     }
   } catch (e) {
-    toast.error('حدث خطأ أثناء تحميل بيانات التسوية')
+    toast.error(extractError(e))
   } finally {
     loading.value = false
   }
@@ -403,7 +403,7 @@ async function applyDecision(item, decision) {
     toast.success('تم تحديث القرار')
     await loadData()
   } catch (e) {
-    toast.error('حدث خطأ أثناء تحديث القرار')
+    toast.error(extractError(e))
   } finally {
     itemSaving[itemId] = false
   }
@@ -427,7 +427,7 @@ async function resolveDue(due) {
     toast.success('تم تحديد فترة الالتزام')
     await loadData()
   } catch (e) {
-    toast.error('حدث خطأ أثناء تحديد الفترة')
+    toast.error(extractError(e))
   }
 }
 
@@ -463,7 +463,7 @@ async function completeSettlement() {
     toast.success('تمت تسوية إلغاء العقد بنجاح')
     await loadData()
   } catch (e) {
-    toast.error('حدث خطأ أثناء إكمال التسوية')
+    toast.error(extractError(e))
   } finally {
     completing.value = false
   }

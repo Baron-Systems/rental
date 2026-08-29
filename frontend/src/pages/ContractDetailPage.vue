@@ -90,12 +90,12 @@
         </div>
 
         <!-- Renewal indicator (badge-style, source: page.tsx:332-339) -->
-        <div v-if="contract.renewed_from_contract && contract.previous_contract_number" class="mb-4">
+        <div v-if="contract.renewed_from_contract && (contract.previous_contract_number || contract.previous_contract)" class="mb-4">
           <router-link
             :to="`/contracts/${contract.renewed_from_contract}`"
             class="inline-flex items-center gap-1.5 status-badge border bg-navy-50 text-navy-600 border-navy-200 hover:bg-gold-50 hover:text-gold-600 hover:border-gold-200 transition-colors"
           >
-            تجديد للعقد: {{ contract.previous_contract_number }}
+            تجديد للعقد: {{ contract.previous_contract_number || contract.previous_contract?.contract_number }}
           </router-link>
         </div>
 
@@ -119,7 +119,7 @@
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <Card padding="md">
             <p class="text-xs font-semibold text-navy-400 uppercase tracking-wider mb-2">المستأجر</p>
-            <router-link :to="`/tenants/${contract.tenant}`" class="font-bold text-navy-800 hover:text-gold-600">{{ contract.tenant_name || contract.tenant }}</router-link>
+            <router-link :to="`/tenants/${contract.tenant?.name || contract.tenant}`" class="font-bold text-navy-800 hover:text-gold-600">{{ contract.tenant_name || contract.tenant?.full_name || contract.tenant }}</router-link>
           </Card>
           <Card padding="md">
             <p class="text-xs font-semibold text-navy-400 uppercase tracking-wider mb-2">الوحدة</p>
@@ -187,14 +187,15 @@
           </DataTable>
         </Card>
 
-        <!-- Eviction data section -->
-        <Card v-if="contract.eviction_data" padding="md" class="mb-6">
+        <!-- Eviction data section (source: page.tsx:513-534 — iterate evictions array) -->
+        <Card v-if="contract.status === 'evicted' && contract.evictions?.length" padding="md" class="mb-6">
           <template #title>بيانات الإخلاء</template>
-          <dl class="space-y-3 text-sm">
-            <div class="flex justify-between"><dt class="text-navy-400">تاريخ الإخلاء</dt><dd class="font-medium text-red-600">{{ formatDate(contract.eviction_data.eviction_date) }}</dd></div>
-            <div class="flex justify-between" v-if="contract.eviction_data.reason"><dt class="text-navy-400">السبب</dt><dd class="font-medium text-navy-800">{{ contract.eviction_data.reason }}</dd></div>
-            <div class="flex justify-between" v-if="contract.eviction_data.notes"><dt class="text-navy-400">ملاحظات</dt><dd class="font-medium text-navy-800">{{ contract.eviction_data.notes }}</dd></div>
-          </dl>
+          <div v-for="e in contract.evictions" :key="e.name" class="space-y-2">
+            <dl class="space-y-3 text-sm">
+              <div class="flex justify-between"><dt class="text-navy-400">تاريخ الإخلاء</dt><dd class="font-medium text-red-600">{{ formatDate(e.eviction_date) }}</dd></div>
+              <div class="flex justify-between" v-if="e.notes"><dt class="text-navy-400">ملاحظات</dt><dd class="font-medium text-navy-800">{{ e.notes }}</dd></div>
+            </dl>
+          </div>
         </Card>
 
         <!-- Dues table -->
@@ -462,7 +463,7 @@ function isFullyWaived(due) {
 
 function dueDisplayStatus(d) {
   if (d.status) return d.status
-  if (d.docstatus === 1) return 'active'
+  if (d.docstatus === 1) return 'approved'
   if (d.docstatus === 2) return 'cancelled'
   return 'draft'
 }
@@ -614,7 +615,7 @@ async function handleAttachmentUpload(files) {
       attachments: items,
     })
     fetchContract()
-  } catch (e) { toast.error('حدث خطأ أثناء رفع الصور') }
+  } catch (e) { toast.error(extractError(e)) }
 }
 
 async function handleAttachmentDelete(attachment) {
@@ -625,7 +626,7 @@ async function handleAttachmentDelete(attachment) {
       attachment: attachment.name || attachment.id,
     })
     fetchContract()
-  } catch (e) { toast.error('حدث خطأ أثناء حذف الصور') }
+  } catch (e) { toast.error(extractError(e)) }
 }
 
 onMounted(fetchContract)

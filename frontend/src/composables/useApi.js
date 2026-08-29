@@ -17,8 +17,7 @@ export async function callApi(method, params = {}, options = {}) {
     // Frappe returns { message: ... } for whitelisted methods
     return res?.message !== undefined ? res.message : res
   } catch (err) {
-    const msg = err?.message || err?._server_messages?.[0] || 'حدث خطأ غير متوقع'
-    if (opts.autoToast) console.error(`API ${method} failed:`, msg)
+    if (opts.autoToast) console.error(`API ${method} failed:`, err)
     throw err
   }
 }

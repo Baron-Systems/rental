@@ -46,6 +46,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import FormField from '@/components/ui/FormField.vue'
 import { useSession } from '@/composables/useSession'
+import { extractError } from '@/composables/useApi'
 
 const router = useRouter()
 const session = useSession()
@@ -70,7 +71,7 @@ async function handleLogin() {
       error.value = 'فشل تسجيل الدخول. تحقق من بياناتك.'
     }
   } catch (e) {
-    error.value = 'حدث خطأ أثناء تسجيل الدخول. حاول مرة أخرى.'
+    error.value = extractError(e)
   } finally {
     loading.value = false
   }

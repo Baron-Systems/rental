@@ -463,7 +463,7 @@ async function fetchBuilding() {
     // Normalize units: floor may come as {id, name} object from API; components expect floor as string id
     units.value = (res.units || []).map(u => ({
       ...u,
-      floor: u.floor ? (u.floor.id || u.floor) : null,
+      floor: u.floor ? (u.floor.name || u.floor) : null,
       floor_name: u.floor ? (u.floor.name || u.floor_name) : null,
     }))
     contracts.value = res.contracts || []
