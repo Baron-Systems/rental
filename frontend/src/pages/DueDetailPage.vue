@@ -28,7 +28,7 @@
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <Card padding="md">
             <p class="text-xs font-semibold text-navy-400 uppercase tracking-wider mb-2">المستأجر</p>
-            <router-link :to="`/tenants/${due.tenant}`" class="font-bold text-navy-800 hover:text-gold-600">{{ due.tenant }}</router-link>
+            <router-link :to="`/tenants/${due.tenant}`" class="font-bold text-navy-800 hover:text-gold-600">{{ due.tenant_name || due.tenant }}</router-link>
           </Card>
           <Card padding="md">
             <p class="text-xs font-semibold text-navy-400 uppercase tracking-wider mb-2">المبلغ</p>
@@ -49,7 +49,7 @@
           <Card padding="md">
             <template #title>تفاصيل الالتزام</template>
             <dl class="space-y-3 text-sm">
-              <div class="flex justify-between"><dt class="text-navy-400">العقد</dt><dd><router-link :to="`/contracts/${due.contract}`" class="text-gold-600 hover:underline font-medium">{{ due.contract }}</router-link></dd></div>
+              <div class="flex justify-between"><dt class="text-navy-400">العقد</dt><dd><router-link :to="`/contracts/${due.contract}`" class="text-gold-600 hover:underline font-medium">{{ due.contract_number || due.contract }}</router-link></dd></div>
               <div class="flex justify-between"><dt class="text-navy-400">نوع الالتزام</dt><dd class="font-medium text-navy-800">{{ due.due_type_name || due.due_type }}</dd></div>
               <div class="flex justify-between"><dt class="text-navy-400">المصدر</dt><dd class="font-medium text-navy-800">{{ sourceLabel(due.source_type) }}</dd></div>
               <div class="flex justify-between"><dt class="text-navy-400">طريقة الحساب</dt><dd class="font-medium text-navy-800">{{ methodLabel(due.calculation_method) }}</dd></div>

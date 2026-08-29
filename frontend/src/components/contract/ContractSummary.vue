@@ -39,7 +39,7 @@
           <div>
             <p class="text-xs text-navy-500">الوحدة</p>
             <p class="font-medium text-navy-900">
-              {{ selectedUnit ? `${selectedUnit.unit_number || selectedUnit.unitNumber} — ${selectedBuilding?.name || ''}` : '—' }}
+              {{ selectedUnit ? `${selectedUnit.unit_number || selectedUnit.unitNumber} — ${selectedBuilding?.building_name || selectedBuilding?.name || ''}` : '—' }}
             </p>
             <p v-if="selectedUnit" class="text-xs text-navy-500">
               {{ selectedUnit.floor?.name || selectedUnit.floor_name }}

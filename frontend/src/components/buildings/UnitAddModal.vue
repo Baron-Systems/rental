@@ -24,9 +24,9 @@
           </select>
         </FormField>
         <FormField label="المساحة">
-          <div class="relative">
-            <input v-model.number="form.area" type="number" step="any" dir="ltr" placeholder="120" class="input-premium pl-10" />
-            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-navy-400">م²</span>
+          <div class="relative" dir="ltr">
+            <input v-model.number="form.area" type="number" step="any" placeholder="120" class="input-premium has-icon-start" />
+            <span class="absolute top-1/2 -translate-y-1/2 text-xs font-medium text-navy-400 icon-start">م²</span>
           </div>
         </FormField>
         <FormField label="عدد الغرف">

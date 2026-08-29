@@ -164,7 +164,7 @@ def get_dues(
 		if d.get("tenant"):
 			d["tenant_name"] = frappe.db.get_value("Rental Tenant", d["tenant"], "full_name")
 		if d.get("building"):
-			d["building_name"] = frappe.db.get_value("Rental Building", d["building"], "name")
+			d["building_name"] = frappe.db.get_value("Rental Building", d["building"], "building_name")
 		if d.get("unit"):
 			d["unit_number"] = frappe.db.get_value("Rental Unit", d["unit"], "unit_number")
 		if d.get("contract"):
@@ -253,7 +253,7 @@ def get_due(name):
 	if result.get("tenant"):
 		result["tenant_name"] = frappe.db.get_value("Rental Tenant", result["tenant"], "full_name")
 	if result.get("building"):
-		result["building_name"] = frappe.db.get_value("Rental Building", result["building"], "name")
+		result["building_name"] = frappe.db.get_value("Rental Building", result["building"], "building_name")
 	if result.get("unit"):
 		result["unit_number"] = frappe.db.get_value("Rental Unit", result["unit"], "unit_number")
 	if result.get("contract"):

@@ -110,7 +110,7 @@ const columns = computed(() => {
 
 // ---- Helpers ----
 function getBuildingUnit(c) {
-  const buildingName = c.building_name || c.building?.name || c.building?.building_name || ''
+  const buildingName = c.building_name || c.building?.building_name || c.building?.name || ''
   const unitNumber = c.unit_number || c.unit?.unitNumber || c.unit?.unit_number
   const unitStr = unitNumber ? `وحدة ${unitNumber}` : ''
   const f = props.appliedFilters || {}

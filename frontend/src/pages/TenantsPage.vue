@@ -22,8 +22,8 @@
       <Card padding="md" class="mb-4">
         <div class="flex flex-col sm:flex-row gap-3">
           <div class="relative flex-1">
-            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-navy-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-            <input v-model="filters.search" type="text" placeholder="بحث بالاسم أو الهوية أو الهاتف..." class="input-premium pr-10" @input="handleSearchChange" />
+            <svg class="absolute top-1/2 -translate-y-1/2 w-4 h-4 text-navy-400 pointer-events-none icon-start" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input v-model="filters.search" type="text" placeholder="بحث بالاسم أو الهوية أو الهاتف..." class="input-premium has-icon-start" @input="handleSearchChange" />
           </div>
           <button class="btn-premium btn-outline inline-flex items-center gap-1.5" @click="showAdvanced = !showAdvanced">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
@@ -46,21 +46,21 @@
           <div>
             <label class="block text-xs font-semibold text-navy-500 mb-1">العقار</label>
             <div class="relative">
-              <select v-model="filters.buildingId" class="input-premium" :class="{ 'pr-8': filters.buildingId }" @change="handleBuildingChange">
+              <select v-model="filters.buildingId" class="input-premium" :class="{ 'has-clear-start': filters.buildingId }" @change="handleBuildingChange">
                 <option value="">كل العقارات</option>
                 <option v-for="b in buildings" :key="b.name" :value="b.name">{{ b.building_name }}</option>
               </select>
-              <button v-if="filters.buildingId" class="absolute left-2 top-1/2 -translate-y-1/2 text-navy-400 hover:text-navy-700" @click="clearBuilding">✕</button>
+              <button v-if="filters.buildingId" class="absolute top-1/2 -translate-y-1/2 text-navy-400 hover:text-navy-700 clear-start" @click="clearBuilding">✕</button>
             </div>
           </div>
           <div>
             <label class="block text-xs font-semibold text-navy-500 mb-1">الوحدة</label>
             <div class="relative">
-              <select v-model="filters.unitId" class="input-premium" :disabled="!filters.buildingId" :class="{ 'pr-8': filters.unitId, 'opacity-50 cursor-not-allowed': !filters.buildingId }" @change="handleFilterChange">
+              <select v-model="filters.unitId" class="input-premium" :disabled="!filters.buildingId" :class="{ 'has-clear-start': filters.unitId, 'opacity-50 cursor-not-allowed': !filters.buildingId }" @change="handleFilterChange">
                 <option value="">كل الوحدات</option>
                 <option v-for="u in units" :key="u.name" :value="u.name">{{ u.unit_number }}</option>
               </select>
-              <button v-if="filters.unitId" class="absolute left-2 top-1/2 -translate-y-1/2 text-navy-400 hover:text-navy-700" @click="clearUnit">✕</button>
+              <button v-if="filters.unitId" class="absolute top-1/2 -translate-y-1/2 text-navy-400 hover:text-navy-700 clear-start" @click="clearUnit">✕</button>
             </div>
           </div>
         </div>
@@ -115,7 +115,7 @@
         </DataTable>
 
         <!-- Pagination footer -->
-        <div class="px-4 py-3 border-t border-ivory-300/60 text-xs text-navy-400 flex items-center justify-between">
+        <div v-if="pagination" class="px-4 py-3 border-t border-ivory-300/60 text-xs text-navy-400 flex items-center justify-between">
           <span>إجمالي: {{ pagination.total }} مستأجر</span>
           <span v-if="filters.search">نتائج البحث: "{{ filters.search }}"</span>
         </div>

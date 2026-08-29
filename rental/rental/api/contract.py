@@ -548,6 +548,12 @@ def create_contract(**kwargs):
 	contract = frappe.get_doc(contract_data)
 	contract.insert(ignore_permissions=is_system_manager())
 
+	# Source: old program increments contract_counter inside the same
+	# transaction as leaseContract.create. Here we increment after insert
+	# succeeds so the counter doesn't advance on validation failure.
+	from rental.rental.doctype.rental_settings.rental_settings import increment_contract_counter
+	increment_contract_counter(account)
+
 	# Determine if dues choice is needed (past contract)
 	period_status = get_contract_period_status(contract.start_date, contract.end_date)
 	requires_dues_choice = period_status == "past"

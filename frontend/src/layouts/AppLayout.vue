@@ -243,10 +243,6 @@ const breadcrumbMap = {
   '/settings': 'الإعدادات',
 }
 
-function isUUID(str) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)
-}
-
 function getBreadcrumbs(pathname) {
   const segments = pathname.split('/').filter(Boolean)
   const breadcrumbs = []
@@ -263,8 +259,7 @@ function getBreadcrumbs(pathname) {
       else if (segment === 'settlement') label = 'تسوية'
       else if (segment === 'statement') label = 'كشف حساب'
       else if (segment === 'print') label = 'طباعة'
-      else if (isUUID(segment)) label = 'تفاصيل'
-      else label = segment
+      else label = 'تفاصيل'
     }
     breadcrumbs.push({ href: path, label })
   }

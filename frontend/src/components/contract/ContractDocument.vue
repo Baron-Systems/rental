@@ -107,7 +107,7 @@
           <!-- Tenant clause -->
           <span v-if="!selectedTenant" class="text-navy-400">[المستأجر لم يُحدد]</span>
           <template v-else>
-            السيد/ة <strong>{{ selectedTenant.fullName || selectedTenant.tenant_name }}</strong>،
+            السيد/ة <strong>{{ selectedTenant.full_name || selectedTenant.fullName || selectedTenant.tenant_name }}</strong>،
             حامل/ة هوية رقم <strong>{{ selectedTenant.nationalId || selectedTenant.national_id || '—' }}</strong>،
             ويشار إليه/إليها لاحقًا بـ <strong>«المستأجر» أو «الطرف الثاني»</strong>.
           </template>
@@ -182,7 +182,7 @@
       <p v-if="selectedUnit" class="leading-loose text-justify text-navy-900">
         أجر الطرف الأول إلى الطرف الثاني الوحدة رقم
         <strong>{{ selectedUnit.unitNumber || selectedUnit.unit_number }}</strong>
-        الواقعة في عقار <strong>{{ selectedBuilding?.name || selectedBuilding?.building_name }}</strong>،
+        الواقعة في عقار <strong>{{ selectedBuilding?.building_name || selectedBuilding?.name }}</strong>،
         في <strong>{{ selectedUnitFloorName || '—' }}</strong>،
         من نوع <strong>{{ unitTypeLabel(selectedUnit.unitType || selectedUnit.unit_type) }}</strong><template
           v-if="selectedUnit.area || selectedUnit.unit_area"
@@ -640,7 +640,7 @@ watch(
 // ---- Tenant selection ----
 const tenantOptions = computed(() =>
   props.tenants.map((t) => ({
-    label: t.fullName || t.tenant_name || t.name,
+    label: t.full_name || t.fullName || t.tenant_name || t.name,
     value: t.id || t.name,
     meta: t.nationalId || t.national_id || t.phone || '',
   }))
@@ -657,7 +657,7 @@ const buildingOptions = computed(() => {
   const withUnits = props.buildings.filter(
     (b) => (b.id || b.name) === formBuildingId || props.units.some((u) => (u.buildingId || u.building) === (b.id || b.name))
   )
-  return withUnits.map((b) => ({ label: b.name || b.building_name, value: b.id || b.name }))
+  return withUnits.map((b) => ({ label: b.building_name || b.name, value: b.id || b.name }))
 })
 
 const selectedBuilding = computed(() => {
@@ -669,7 +669,7 @@ const floorOptions = computed(() => {
   const formBuildingId = form.value.buildingId || form.value.building
   return props.floors
     .filter((f) => (f.buildingId || f.building) === formBuildingId)
-    .map((f) => ({ label: f.name || f.floor_name, value: f.id || f.name }))
+    .map((f) => ({ label: f.floor_name || f.name, value: f.id || f.name }))
 })
 
 // Source: ContractDocument.tsx:303 — exact match, no 'unavailable' label
@@ -704,7 +704,7 @@ const selectedUnitFloorName = computed(() => {
   if (u.floor?.name) return u.floor.name
   if (u.floor_name) return u.floor_name
   const f = props.floors.find((fl) => (fl.id || fl.name) === (u.floorId || u.floor))
-  return f?.name || f?.floor_name || '—'
+  return f?.floor_name || f?.name || '—'
 })
 
 // ---- Payment schedule ----
@@ -818,6 +818,10 @@ function numberToWordsArabic(n) {
   padding: 0.25rem 0.5rem;
   font-size: 0.875rem;
   background: #fff;
+}
+/* Number input-v2: reserve space for browser spinner at inline-end */
+input[type="number"].input-v2 {
+  padding-inline-end: 1.25rem;
 }
 .print-only {
   display: none;

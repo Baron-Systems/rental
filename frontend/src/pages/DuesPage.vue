@@ -98,8 +98,8 @@
       <!-- Filters: Row 1 — Search + Status + Tenant + Advanced toggle -->
       <div class="flex flex-col gap-3 lg:flex-row lg:items-start mb-4">
         <div class="relative flex-1">
-          <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-          <input v-model="filters.search" type="text" placeholder="بحث برقم الالتزام..." class="input-premium pr-9" @input="debouncedFetch" />
+          <svg class="pointer-events-none absolute top-1/2 -translate-y-1/2 w-4 h-4 text-navy-400 icon-start" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input v-model="filters.search" type="text" placeholder="بحث برقم الالتزام..." class="input-premium has-icon-start" @input="debouncedFetch" />
         </div>
         <div class="w-full lg:w-44">
           <select v-model="filters.status" class="input-premium" @change="fetchDues()">
@@ -449,7 +449,8 @@ async function loadFormData() {
   try {
     const contractsRes = await callApi('rental.rental.api.contract.get_contracts', { status: 'active', limit: 100 })
     activeContracts.value = contractsRes.contracts || []
-    const dtRes = await callApi('rental.rental.api.settings.get_due_types')
+    // Source: dues/page.tsx:508 — old program calls fetch('/api/settings/due-types?includeSystem=true&includeInactive=true')
+    const dtRes = await callApi('rental.rental.api.settings.get_due_types', { include_system: 1, include_inactive: 1 })
     dueTypes.value = (dtRes.dueTypes || []).filter(dt => !dt.is_system || dt.due_type_code !== 'rent')
   } catch { /* ignore */ }
 }

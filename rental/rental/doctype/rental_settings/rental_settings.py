@@ -243,18 +243,74 @@ def parse_lessor_snapshot(snapshot_json: str | None) -> dict:
 
 
 def generate_contract_number(account: str) -> str:
-	"""Generate the next contract number and increment the counter."""
+	"""Generate the next contract number (without incrementing the counter).
+
+	Source: old program uses a single global ``contract_counter`` Setting
+	(not per-account), so contract numbers are globally unique.
+
+	The counter is incremented separately via ``increment_contract_counter``
+	after the contract is successfully inserted, matching the old program's
+	transactional behaviour (counter + create in one transaction).
+	"""
 	settings = get_settings_doc(account)
 	if not settings:
 		frappe.throw(frappe._("الإعدادات غير موجودة. يرجى إكمال الإعداد أولاً"))
 
 	prefix = settings.contract_prefix or "CNT"
-	counter = settings.contract_counter or 0
-	number = generate_number(prefix, counter)
 
-	settings.contract_counter = counter + 1
-	settings.db_update()
+	# Source: old program — contract_counter is a single global counter.
+	# In the new multi-tenant schema, each Rental Settings row has its own
+	# contract_counter, but contract_number is globally unique. To match the
+	# old behaviour, use the maximum counter across all accounts + 1.
+	max_counter = frappe.db.sql(
+		"SELECT MAX(contract_counter) FROM `tabRental Settings`", as_dict=False
+	)[0][0] or 0
+	number = generate_number(prefix, max_counter)
+
+	# Safety: ensure the generated number does not collide with an existing one
+	if frappe.db.exists("Lease Contract", {"contract_number": number}):
+		# Fall back to max existing contract_number suffix + 1
+		existing = frappe.db.sql(
+			"""
+			SELECT contract_number FROM `tabLease Contract`
+			WHERE contract_number LIKE %s
+			ORDER BY contract_number DESC
+			""",
+			(prefix + "-%"),
+			as_dict=True,
+		)
+		max_suffix = 0
+		for row in existing:
+			parts = (row.contract_number or "").split("-")
+			if len(parts) == 2:
+				try:
+					suffix = int(parts[1])
+					if suffix > max_suffix:
+						max_suffix = suffix
+				except ValueError:
+					pass
+		number = generate_number(prefix, max_suffix)
+
 	return number
+
+
+def increment_contract_counter(account: str) -> None:
+	"""Increment the contract counter after a contract is successfully created.
+
+	Source: old program increments ``contract_counter`` inside the same
+	transaction as ``leaseContract.create``. Here we call this after
+	``contract.insert()`` succeeds.
+	"""
+	settings = get_settings_doc(account)
+	if not settings:
+		return
+
+	# Keep all accounts in sync: set to max across all accounts + 1
+	max_counter = frappe.db.sql(
+		"SELECT MAX(contract_counter) FROM `tabRental Settings`", as_dict=False
+	)[0][0] or 0
+	settings.contract_counter = max_counter + 1
+	settings.db_update()
 
 
 def generate_due_number(account: str) -> str:

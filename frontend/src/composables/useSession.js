@@ -52,7 +52,10 @@ export function useSession() {
       method: 'POST',
       params: { usr: email, pwd: password },
     })
-    if (res === 'Logged In' || (res && res.message === 'Logged In')) {
+    // Frappe returns "Logged In" for System Users and "No App" for Website Users.
+    // frappeRequest throws on failure, so any truthy response means login succeeded.
+    const msg = typeof res === 'string' ? res : res?.message
+    if (msg === 'Logged In' || msg === 'No App') {
       state.user = email
       await fetchAccount()
       return true

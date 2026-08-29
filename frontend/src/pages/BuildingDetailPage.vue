@@ -388,7 +388,8 @@ const occupancyRate = computed(() => {
 const unitsByFloor = computed(() => {
   const map = {}
   for (const u of units.value) {
-    const key = u.floor || '__none'
+    // Source: page.tsx:327 — floor is an object {id, name}, use .id as key
+    const key = u.floor?.id || u.floor || '__none'
     if (!map[key]) map[key] = []
     map[key].push(u)
   }
@@ -460,12 +461,9 @@ async function fetchBuilding() {
     const res = await callApi('rental.rental.api.property.get_building', { name: route.params.id })
     building.value = res
     floors.value = res.floors || []
-    // Normalize units: floor may come as {id, name} object from API; components expect floor as string id
-    units.value = (res.units || []).map(u => ({
-      ...u,
-      floor: u.floor ? (u.floor.name || u.floor) : null,
-      floor_name: u.floor ? (u.floor.name || u.floor_name) : null,
-    }))
+    // Source: page.tsx — units keep floor as {id, name} object from API
+    // unitsByFloor uses u.floor?.id as key, matching floor.name (document ID)
+    units.value = res.units || []
     contracts.value = res.contracts || []
     tenants.value = res.tenants || []
   } catch (e) {

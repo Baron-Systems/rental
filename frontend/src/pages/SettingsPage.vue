@@ -448,7 +448,8 @@ async function fetchSettings() {
 
 async function fetchDueTypes() {
   try {
-    const res = await callApi('rental.rental.api.settings.get_due_types', { include_system: 1, include_inactive: 1 })
+    // Show all custom due types (active and inactive) so the "معطل" badge is visible
+    const res = await callApi('rental.rental.api.settings.get_due_types', { include_system: 0, include_inactive: 1 })
     dueTypes.value = res.dueTypes || []
   } catch { dueTypes.value = [] }
 }

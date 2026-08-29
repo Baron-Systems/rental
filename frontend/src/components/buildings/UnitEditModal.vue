@@ -24,9 +24,9 @@
           </select>
         </FormField>
         <FormField label="المساحة">
-          <div class="relative">
-            <input v-model.number="form.area" type="number" step="any" dir="ltr" placeholder="120" class="input-premium pl-10" :disabled="!editableFields.includes('area')" :class="{ 'opacity-60': !editableFields.includes('area') }" />
-            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-medium text-navy-400">م²</span>
+          <div class="relative" dir="ltr">
+            <input v-model.number="form.area" type="number" step="any" placeholder="120" class="input-premium has-icon-start" :disabled="!editableFields.includes('area')" :class="{ 'opacity-60': !editableFields.includes('area') }" />
+            <span class="absolute top-1/2 -translate-y-1/2 text-xs font-medium text-navy-400 icon-start">م²</span>
           </div>
         </FormField>
         <FormField label="عدد الغرف">
@@ -81,7 +81,8 @@ const editableFields = ref([
 const form = ref({
   unit_number: props.unit?.unit_number || '',
   unit_type: props.unit?.unit_type || '',
-  floor: props.unit?.floor || '',
+  // Source: page.tsx:479 — floor is {id, name} object, use .id for select value
+  floor: props.unit?.floor?.id || props.unit?.floor || '',
   area: props.unit?.area ?? null,
   rooms_count: props.unit?.rooms_count ?? null,
   bathrooms_count: props.unit?.bathrooms_count ?? null,

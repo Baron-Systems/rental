@@ -30,14 +30,14 @@
             <div>
               <label for="cancellationDate" class="mb-1.5 block text-sm font-medium text-navy-900">تاريخ الإلغاء</label>
               <div class="relative">
-                <svg class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="absolute top-1/2 h-4 w-4 -translate-y-1/2 text-navy-400 icon-end" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                 </svg>
                 <input
                   id="cancellationDate"
                   type="date"
                   v-model="cancellationDate"
-                  class="w-full rounded-lg border border-ivory-300 bg-white px-3 py-2 pl-10 text-sm focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-200/40"
+                  class="w-full rounded-lg border border-ivory-300 bg-white px-3 py-2 has-icon-end text-sm focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-200/40"
                 />
               </div>
               <p class="mt-1.5 text-xs text-navy-500">

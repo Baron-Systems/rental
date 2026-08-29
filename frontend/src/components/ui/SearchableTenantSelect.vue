@@ -8,7 +8,7 @@
       @click="!disabled && (open = !open)"
     >
       <span :class="selectedLabel ? 'text-navy-800' : 'text-navy-400'">{{ selectedLabel || placeholder }}</span>
-      <svg class="w-4 h-4 text-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      <svg v-if="!(modelValue && clearable)" class="w-4 h-4 text-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
     </button>
 
     <input v-if="required && !modelValue" type="hidden" required :value="modelValue" />
@@ -19,11 +19,11 @@
           ref="searchInput"
           v-model="search"
           type="text"
-          class="input-premium pr-9 text-sm"
+          class="input-premium has-icon-start text-sm"
           placeholder="البحث عن مستأجر..."
           @input="onSearchInput"
         />
-        <svg class="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <svg class="absolute top-1/2 -translate-y-1/2 w-4 h-4 text-navy-400 icon-start" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
       </div>
 
       <div class="max-h-64 overflow-y-auto">
@@ -46,7 +46,7 @@
 
     <button
       v-if="modelValue && clearable"
-      class="absolute left-2 top-1/2 -translate-y-1/2 text-navy-400 hover:text-navy-700"
+      class="absolute top-1/2 -translate-y-1/2 text-navy-400 hover:text-navy-700 icon-end"
       @click="clear"
     >✕</button>
   </div>

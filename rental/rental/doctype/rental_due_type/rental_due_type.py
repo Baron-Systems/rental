@@ -22,10 +22,20 @@ class RentalDueType(Document):
 		if not self.is_system:
 			account = get_current_rental_account()
 			if account is None:
-				frappe.throw(
-					frappe._("Custom Due Types must belong to a Rental Account"),
-					frappe.ValidationError,
-				)
+				# System Manager: allow if rental_account is already set
+				# (the API layer resolves the target account for System Manager)
+				if not self.rental_account:
+					frappe.throw(
+						frappe._("Custom Due Types must belong to a Rental Account"),
+						frappe.ValidationError,
+					)
+				# Validate the assigned account exists and is active
+				if not frappe.db.exists("Rental Account", {"name": self.rental_account, "is_active": 1}):
+					frappe.throw(
+						frappe._("Custom Due Types must belong to a Rental Account"),
+						frappe.ValidationError,
+					)
+				return
 			if not self.rental_account:
 				self.rental_account = account
 			if self.rental_account != account:

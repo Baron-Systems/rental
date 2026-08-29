@@ -91,7 +91,8 @@ function unitTypeLabel(type) { return unitTypeLabels[type] || type || '' }
 const unitsByFloor = computed(() => {
   const map = {}
   for (const u of props.units) {
-    const key = u.floor || '__none'
+    // Source: page.tsx:327 — floor is an object {id, name}, use .id as key
+    const key = u.floor?.id || u.floor || '__none'
     if (!map[key]) map[key] = []
     map[key].push(u)
   }

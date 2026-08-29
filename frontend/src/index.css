@@ -46,11 +46,12 @@ body {
   background: rgba(15, 31, 66, 0.25);
 }
 
-/* Premium input styles */
+/* Premium input styles — uses logical properties (padding-inline-*) for RTL/LTR safety */
 .input-premium {
   width: 100%;
   height: 44px;
-  padding: 0 14px;
+  padding-block: 0;
+  padding-inline: 14px;
   border: 1.5px solid #ede7d6;
   border-radius: 12px;
   background: #ffffff;
@@ -74,18 +75,46 @@ body {
 
 textarea.input-premium {
   height: auto;
-  padding: 12px 14px;
+  padding-block: 12px;
+  padding-inline: 14px;
   resize: vertical;
 }
 
+/* Select: arrow at inline-end (left in RTL). background-position is physical
+   (no logical equivalent), so we use left directly — the app is RTL-only.
+   padding-inline-end adapts automatically. */
 select.input-premium {
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%230f1f42'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: left 12px center;
   background-size: 18px;
-  padding-left: 40px;
+  padding-inline-end: 40px;
 }
+
+/* ---- Number input: reserve space for browser spinner arrows at inline-end ---- */
+input[type="number"].input-premium {
+  padding-inline-end: 1.75rem;
+}
+
+/* ================================================================
+   Icon / clear-button utility classes (logical properties)
+   Use these instead of hard-coded pr/pl/left/right on inputs
+   with absolutely-positioned icons or controls.
+
+   .has-icon-start  → padding-inline-start: 2.5rem  (space for icon at start)
+   .has-icon-end    → padding-inline-end:   2.5rem  (space for icon at end)
+   .icon-start      → inset-inline-start:   0.75rem (position icon at start)
+   .icon-end        → inset-inline-end:     0.75rem (position icon at end)
+   .has-clear-start → padding-inline-start: 2rem    (space for clear button at start)
+   .clear-start     → inset-inline-start:   0.5rem  (position clear button at start)
+   ================================================================ */
+.has-icon-start  { padding-inline-start: 2.5rem; }
+.has-icon-end    { padding-inline-end:   2.5rem; }
+.icon-start      { inset-inline-start:   0.75rem; }
+.icon-end        { inset-inline-end:     0.75rem; }
+.has-clear-start { padding-inline-start: 2rem; }
+.clear-start     { inset-inline-start:   0.5rem; }
 
 /* Premium button styles */
 .btn-premium {
