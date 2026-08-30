@@ -385,12 +385,11 @@ onMounted(fetchReceipt)
 </script>
 
 <style scoped>
+/* Source: old receipts/[id]/page.tsx — when printing, only the receipt document is visible.
+   The sidebar (print:hidden in AppLayout), header (print:hidden), and page content
+   (print:hidden when `printing` is true) are all hidden via Tailwind print variants.
+   Global print CSS in index.css handles layout unblocking and .print-document sizing. */
 @media print {
-  :deep(.app-layout > *:not(.receipt-print-document)),
-  :deep(.app-layout nav),
-  :deep(.app-layout header) {
-    display: none !important;
-  }
   .receipt-print-document {
     width: 100% !important;
     max-width: none !important;

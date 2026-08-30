@@ -262,8 +262,10 @@
         </div>
         <div class="flex items-center gap-2">
           <span class="text-sm font-medium text-navy-900">تاريخ البداية:</span>
-          <!-- Source: ContractDocument.tsx:518-529 — plain span in preview, InlineField in edit -->
-          <span v-if="isPreview" class="text-sm text-navy-900">{{ (form.startDate || form.start_date) ? formatDate(form.startDate || form.start_date) : '-' }}</span>
+          <!-- Source: ContractDocument.tsx:518-529 — plain span in preview, InlineField in edit.
+               In renewal, start_date is auto-set by backend (previous.end_date + 1) and cannot be changed,
+               so render as read-only span like endDate. -->
+          <span v-if="isPreview || isRenewal" class="text-sm text-navy-900">{{ (form.startDate || form.start_date) ? formatDate(form.startDate || form.start_date) : '-' }}</span>
           <InlineField
             v-else
             :value="form.startDate || form.start_date"

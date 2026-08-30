@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="p-6 lg:p-8" dir="rtl">
+    <div class="p-6 lg:p-8" dir="rtl" :class="{ 'print:hidden': printing }">
       <PageHeader title="الالتزامات" description="إدارة الالتزامات المالية للمستأجرين" action-label="إضافة التزام" @action="openCreateModal(); showCreateForm = true">
         <template #actions>
           <button class="btn-premium btn-outline inline-flex items-center gap-1.5" :disabled="printing || loading" @click="handlePrint">
@@ -368,11 +368,22 @@
         <Pagination v-if="pagination" :page="pagination.page" :page-size="pagination.pageSize" :total="pagination.total" @change="onPageChange" />
       </Card>
     </div>
+
+    <!-- Print Document (source: dues/page.tsx:1491-1501) -->
+    <div v-if="printData" class="dues-list-print-document">
+      <DuesListPrintDocument
+        :dues="printData.dues"
+        :applied-filters="printData.appliedFilters"
+        :total="printData.total"
+        :total-amount="printData.totalAmount"
+        :lessor-data="lessorData"
+      />
+    </div>
   </AppLayout>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, h, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
@@ -386,6 +397,7 @@ import Pagination from '@/components/ui/Pagination.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import FormField from '@/components/ui/FormField.vue'
 import SearchableTenantSelect from '@/components/ui/SearchableTenantSelect.vue'
+import DuesListPrintDocument from '@/components/due/DuesListPrintDocument.vue'
 import { callApi, formatMoney, formatDate, extractError } from '@/composables/useApi'
 import { useSession } from '@/composables/useSession'
 import { useToast } from '@/composables/useToast'
@@ -405,7 +417,7 @@ const columns = [
   { key: 'date', label: 'تاريخ الالتزام' },
   { key: 'amount', label: 'المبلغ' },
   { key: 'status', label: 'الحالة الزمنية' },
-  { key: 'actions', label: '', align: 'center' },
+  { key: 'actions', label: 'إجراءات', align: 'center' },
 ]
 
 const dues = ref([])
@@ -428,6 +440,9 @@ const filters = ref({
   dueTypeId: '',
 })
 const printing = ref(false)
+const printLoading = ref(false)
+const printData = ref(null)
+const lessorData = computed(() => session.state.account?.settings || null)
 const showAdvanced = ref(false)
 const selectedFilterTenantName = ref('')
 const filterContracts = ref([])
@@ -448,6 +463,48 @@ const hasActiveFilters = computed(() =>
   filters.value.fromDate !== '' ||
   filters.value.toDate !== ''
 )
+
+// Computed: applied filters for print (source: dues/page.tsx:398-424)
+const statusFilterOptions = [
+  { value: 'all', label: 'كل الحالات' },
+  { value: 'draft', label: 'مسودة' },
+  { value: 'due', label: 'مستحق' },
+  { value: 'future', label: 'مستقبلي' },
+  { value: 'cancelled', label: 'ملغي' },
+]
+const sourceTypeFilterOptions = [
+  { value: 'all', label: 'كل المصادر' },
+  { value: 'auto_contract', label: 'ناتج من العقد' },
+  { value: 'manual_contract', label: 'يدوي تعاقدي' },
+  { value: 'additional', label: 'إضافي' },
+]
+const appliedFilters = computed(() => {
+  const result = {}
+  const statusLabel = statusFilterOptions.find((o) => o.value === filters.value.status)?.label
+  if (statusLabel && filters.value.status !== 'all' && filters.value.status !== '') {
+    result.status = statusLabel
+    result.statusValue = filters.value.status
+  }
+  if (filters.value.search.trim()) result.search = filters.value.search.trim()
+  if (filters.value.tenantId) result.tenant = selectedFilterTenantName.value
+  if (filters.value.contractId) {
+    const c = filterContracts.value.find((x) => x.name === filters.value.contractId)
+    result.contract = c ? formatContractOptionLabel(c) : filters.value.contractId
+  }
+  if (filters.value.dueTypeId) {
+    const dt = dueTypes.value.find((x) => x.name === filters.value.dueTypeId)
+    result.dueType = dt?.due_type_name || dt?.name || filters.value.dueTypeId
+  }
+  if (filters.value.sourceType) {
+    result.sourceType = sourceTypeFilterOptions.find((o) => o.value === filters.value.sourceType)?.label || filters.value.sourceType
+  }
+  if (filters.value.fromDate || filters.value.toDate) {
+    const from = filters.value.fromDate ? new Date(filters.value.fromDate).toLocaleDateString('en-GB') : '—'
+    const to = filters.value.toDate ? new Date(filters.value.toDate).toLocaleDateString('en-GB') : '—'
+    result.dateRange = `${from} - ${to}`
+  }
+  return result
+})
 
 const newDue = ref({
   tenantId: '',
@@ -969,9 +1026,15 @@ async function deleteDue(d) {
 
 function onPageChange(page) { fetchDues(page) }
 
+// Print behavior (source: dues/page.tsx:869-909, 1491-1501 + usePrint.ts)
+// Same pattern as old: fetch all dues with print=true, set printData, show component, window.print()
 async function handlePrint() {
-  printing.value = true
+  if (filters.value.fromDate && filters.value.toDate && filters.value.fromDate > filters.value.toDate) {
+    toast.error('تاريخ البداية يجب أن يكون قبل أو يساوي تاريخ النهاية')
+    return
+  }
   try {
+    printLoading.value = true
     const res = await callApi('rental.rental.api.due.get_dues', {
       search: filters.value.search || undefined,
       status: filters.value.status || undefined,
@@ -983,23 +1046,54 @@ async function handlePrint() {
       due_type: filters.value.dueTypeId || undefined,
       print: 1, limit: 1000,
     })
-    const printDues = res.dues || []
-    const printTotal = res.print?.totalAmount || null
-    const printWin = window.open('', '_blank')
-    printWin.document.write(`<html dir="rtl"><head><title>قائمة الالتزامات</title></head><body>`)
-    printWin.document.write(`<h1>قائمة الالتزامات</h1>`)
-    printWin.document.write(`<table border="1" style="width:100%;border-collapse:collapse;font-size:12px">`)
-    printWin.document.write(`<tr><th>رقم</th><th>المستأجر</th><th>النوع</th><th>التاريخ</th><th>المبلغ</th><th>الحالة</th></tr>`)
-    for (const d of printDues) {
-      printWin.document.write(`<tr><td>${d.due_number}</td><td>${d.tenant_name||'—'}</td><td>${d.due_type_name||'—'}</td><td>${d.transaction_date||'—'}</td><td>${d.amount||0}</td><td>${d.status}</td></tr>`)
+    const allDues = res.dues || []
+    if (allDues.length === 0) {
+      toast.info('لا توجد التزامات مطابقة للطباعة')
+      return
     }
-    printWin.document.write(`</table>`)
-    if (printTotal) printWin.document.write(`<p style="text-align:right;font-weight:bold;margin-top:12px">الإجمالي: ${printTotal}</p>`)
-    printWin.document.write(`</body></html>`)
-    printWin.document.close()
-    printWin.print()
-  } catch (e) { toast.error(extractError(e)) } finally { printing.value = false }
+    printData.value = {
+      dues: allDues,
+      total: res.print?.total ?? allDues.length,
+      totalAmount: res.print?.totalAmount ?? 0,
+      appliedFilters: appliedFilters.value,
+    }
+    printing.value = true
+    await nextTick()
+    await waitForImages()
+    window.print()
+    printing.value = false
+  } catch (e) {
+    toast.error(extractError(e))
+  } finally {
+    printLoading.value = false
+  }
+}
+
+function waitForImages() {
+  return new Promise((resolve) => {
+    const images = Array.from(document.images).filter((img) => !img.complete)
+    if (images.length === 0) return resolve()
+    let finished = 0
+    const onFinish = () => { finished++; if (finished >= images.length) resolve() }
+    images.forEach((img) => {
+      img.addEventListener('load', onFinish)
+      img.addEventListener('error', onFinish)
+    })
+  })
 }
 
 onMounted(() => { fetchDues(); loadFormData() })
 </script>
+
+<style scoped>
+/* Source: old dues/page.tsx — when printing, only the dues list document is visible.
+   The sidebar (print:hidden in AppLayout), header (print:hidden), and page content
+   (print:hidden when `printing` is true) are all hidden via Tailwind print variants.
+   Global print CSS in index.css handles layout unblocking and .print-document sizing. */
+@media print {
+  .dues-list-print-document {
+    width: 100% !important;
+    max-width: none !important;
+  }
+}
+</style>

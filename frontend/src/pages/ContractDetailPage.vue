@@ -234,7 +234,7 @@
           v-model="showCancelModal"
           :contractStart="contract?.start_date || ''"
           :contractEnd="contract?.end_date || ''"
-          @confirm="handleCancelContract"
+          :onConfirm="handleCancelContract"
         />
 
         <!-- Past contract dues dialog -->
@@ -458,10 +458,15 @@ async function handleCancelContract(cancellationDate, reason) {
       cancellation_date: cancellationDate,
       reason: reason || undefined,
     })
-    showCancelModal.value = false
     // Source: page.tsx:237-238 — navigate to settlement page after cancel
     router.push({ name: 'ContractSettlement', params: { id: contract.value.name } })
-  } catch (e) { toast.error(extractError(e)) } finally { cancelling.value = false }
+  } catch (e) {
+    toast.error(extractError(e))
+  } finally {
+    // Source: old project page.tsx:237-243 — close dialog on BOTH success and error
+    showCancelModal.value = false
+    cancelling.value = false
+  }
 }
 
 async function handleEvict() {

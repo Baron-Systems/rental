@@ -276,7 +276,7 @@ async function loadOriginal() {
         opening_meter_reading: undefined,
       })),
       terms: c.terms || '',
-      witnesses: c.witnesses || '',
+      witnesses: '',
       status: 'draft',
     }
   } catch (e) {
@@ -304,7 +304,7 @@ async function handleSave(asDraft = false) {
 
     const result = await callApi('rental.rental.api.contract.renew_contract', {
       name: route.params.id,
-      data: payload,
+      ...payload,
     })
     const newId = result.name || result.contract?.name || result
     router.push({ name: 'ContractDetail', params: { id: newId } })

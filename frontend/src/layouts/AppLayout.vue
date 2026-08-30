@@ -1,5 +1,5 @@
 <template>
-  <div class="flex h-screen bg-ivory-200" dir="rtl">
+  <div class="app-layout flex h-screen bg-ivory-200" dir="rtl">
     <!-- Mobile overlay -->
     <transition name="fade">
       <div
@@ -11,14 +11,14 @@
 
     <!-- Sidebar -->
     <aside
-      class="fixed lg:static inset-y-0 right-0 w-[260px] flex flex-col z-40 transform transition-transform duration-300 lg:translate-x-0"
+      class="fixed lg:static inset-y-0 right-0 w-[260px] flex flex-col z-40 transform transition-transform duration-300 lg:translate-x-0 print:hidden"
       :class="mobileOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'"
-      style="background: linear-gradient(180deg, #0a1530 0%, #0f1f42 50%, #060d1f 100%);"
+      style="background: #012350;"
     >
       <!-- Logo / Brand -->
       <div class="px-6 py-5 border-b border-white/[0.06]">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style="background: linear-gradient(135deg, #e3b94b, #d4a02c);">
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style="background: #b38942;">
             <svg class="w-5 h-5 text-navy-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
             </svg>
@@ -52,7 +52,7 @@
       <!-- User section -->
       <div class="px-4 py-4 border-t border-white/[0.06]">
         <div class="flex items-center gap-3 px-2 py-2 rounded-xl bg-white/[0.03] mb-2">
-          <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-navy-900 shrink-0" style="background: linear-gradient(135deg, #e3b94b, #d4a02c);">
+          <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-navy-900 shrink-0" style="background: #b38942;">
             {{ userInitial }}
           </div>
           <div class="flex-1 min-w-0">

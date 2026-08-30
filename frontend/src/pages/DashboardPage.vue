@@ -202,12 +202,12 @@ const IconWallet = makeIcon('M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 0
 
 // ---- Chart colors (mapped to new project palette, same semantics as original) ----
 const chartColors = {
-  dues: '#162c5a',      // deep navy (original: #012350)
-  receipts: '#059669',  // success green (original: #16865C)
+  dues: '#012350',      // deep navy
+  receipts: '#16885a',  // success green
   rented: '#059669',    // success green
   empty: '#94a3b8',     // muted (original: #73777F)
-  reserved: '#d4a02c',  // gold (original: #B48A42)
-  border: '#ede7d6',    // ivory-300 (original: #E4E3DE)
+  reserved: '#b38942',  // gold accent
+  border: '#e8e4d9',    // ivory-300 border
   graphite: '#486fb0',  // navy-400 (original: #4A4E55)
 }
 

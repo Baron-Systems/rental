@@ -325,24 +325,6 @@
               </div>
             </div>
 
-            <!-- Account tab -->
-            <div v-if="activeTab === 'account'">
-              <div class="space-y-3">
-                <!-- تسجيل الخروج -->
-                <Card padding="md">
-                  <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                    <div>
-                      <p class="text-sm font-medium text-navy-800">تسجيل الخروج من النظام</p>
-                      <p class="text-xs text-navy-400">سيتم إعادة توجيهك إلى صفحة تسجيل الدخول</p>
-                    </div>
-                    <button class="btn-premium btn-ghost text-red-600" @click="handleLogout">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-                      تسجيل الخروج
-                    </button>
-                  </div>
-                </Card>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -352,17 +334,13 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import Card from '@/components/ui/Card.vue'
 import { callApi, extractError } from '@/composables/useApi'
-import { useSession } from '@/composables/useSession'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 
-const router = useRouter()
-const session = useSession()
 const toast = useToast()
 const { confirm } = useConfirm()
 
@@ -370,7 +348,6 @@ const tabs = [
   { key: 'general', label: 'الإعدادات العامة', icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>' },
   { key: 'contracts', label: 'إعدادات العقود', icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
   { key: 'due_types', label: 'أنواع الالتزامات', icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
-  { key: 'account', label: 'الحساب', icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>' },
 ]
 
 const currencies = [
@@ -605,13 +582,6 @@ async function deleteDueType(dt) {
     await callApi('rental.rental.api.settings.delete_due_type', { name: dt.name })
     fetchDueTypes()
   } catch (e) { toast.error(extractError(e)) }
-}
-
-async function handleLogout() {
-  try {
-    await session.logout()
-    router.push({ name: 'Login' })
-  } catch { /* ignore */ }
 }
 
 async function handleLogoUpload(e) {

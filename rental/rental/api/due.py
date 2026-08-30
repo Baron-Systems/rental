@@ -85,54 +85,55 @@ def get_dues(
 		frappe.throw(frappe._("تاريخ البداية يجب أن يكون قبل أو يساوي تاريخ النهاية"))
 
 	# --- Build filters ---
-	filters = {}
+	# Use list-style filters to support multiple conditions on the same field
+	# (e.g. due_date >= X AND due_date <= Y). Dict-style {">=": v, "<=": v} is NOT
+	# supported by Frappe v17's apply_dict_filters — only [op, value] tuples are.
+	# Source: route.ts:91-135 (old Prisma where → Frappe list-style filters).
+	filters = []
 	if account:
-		filters["rental_account"] = account
+		filters.append(["rental_account", "=", account])
 
 	if tenant:
-		filters["tenant"] = tenant
+		filters.append(["tenant", "=", tenant])
 	if contract:
-		filters["contract"] = contract
+		filters.append(["contract", "=", contract])
 	if due_type:
-		filters["due_type"] = due_type
+		filters.append(["due_type", "=", due_type])
 	if source_type:
 		# B8: legacy 'manual_contract' filter includes both manual_contract AND manual.
 		if source_type == "manual_contract":
-			filters["source_type"] = ["in", ["manual_contract", "manual"]]
+			filters.append(["source_type", "in", ["manual_contract", "manual"]])
 		else:
-			filters["source_type"] = source_type
+			filters.append(["source_type", "=", source_type])
 
 	# Status filter (source: route.ts:106-114)
 	if status and status != "all":
 		if status == "draft":
-			filters["docstatus"] = 0
+			filters.append(["docstatus", "=", 0])
 		elif status == "cancelled":
-			filters["docstatus"] = 2
+			filters.append(["docstatus", "=", 2])
 		elif status in ("due", "future"):
-			filters["docstatus"] = 1
+			filters.append(["docstatus", "=", 1])
 
 	# Date filter targets due_date (source: route.ts:116-131)
-	due_date_filter = {}
-	if parsed_from:
-		due_date_filter[">="] = parsed_from
-	if parsed_to:
-		due_date_filter["<="] = parsed_to
+	due_date_gte = parsed_from
+	due_date_lte = parsed_to
 
 	if status == "due":
 		# due = approved & dueDate <= min(toDate, today)
-		due_upper = parsed_to if parsed_to and parsed_to < today else today
-		due_date_filter["<="] = due_upper
+		due_date_lte = parsed_to if parsed_to and parsed_to < today else today
 	elif status == "future":
 		# future = approved & dueDate >= max(fromDate, tomorrow)
 		tomorrow = today + timedelta(days=1)
-		future_lower = parsed_from if parsed_from and parsed_from > tomorrow else tomorrow
-		due_date_filter[">="] = future_lower
+		due_date_gte = parsed_from if parsed_from and parsed_from > tomorrow else tomorrow
 
-	if due_date_filter:
-		filters["due_date"] = due_date_filter
+	if due_date_gte:
+		filters.append(["due_date", ">=", due_date_gte])
+	if due_date_lte:
+		filters.append(["due_date", "<=", due_date_lte])
 
 	if search:
-		filters["due_number"] = ["like", f"%{search}%"]
+		filters.append(["due_number", "like", f"%{search}%"])
 
 	# --- Fields (source: route.ts:56-89) ---
 	fields = [

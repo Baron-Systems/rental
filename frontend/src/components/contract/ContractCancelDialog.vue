@@ -82,9 +82,10 @@ const props = defineProps({
   modelValue: { type: Boolean, default: false },
   contractStart: { type: String, required: true },
   contractEnd: { type: String, required: true },
+  onConfirm: { type: Function, default: null },
 })
 
-const emit = defineEmits(['update:modelValue', 'confirm'])
+const emit = defineEmits(['update:modelValue'])
 
 const cancellationDate = ref(toISODate(new Date()))
 const reason = ref('')
@@ -147,7 +148,7 @@ async function handleSubmit() {
 
   try {
     loading.value = true
-    await emit('confirm', cancellationDate.value, reason.value)
+    await props.onConfirm(cancellationDate.value, reason.value)
   } finally {
     loading.value = false
   }

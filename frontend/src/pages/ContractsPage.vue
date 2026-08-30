@@ -1,6 +1,7 @@
 <template>
   <AppLayout>
-    <div class="p-6 lg:p-8" dir="rtl">
+    <!-- Source: contracts/page.tsx:515 — main content gets print:hidden when printing -->
+    <div class="p-6 lg:p-8" :class="{ 'print:hidden': printing }" dir="rtl">
       <PageHeader title="العقود" description="إدارة العقود الإيجارية" action-label="عقد جديد" @action="router.push({ name: 'ContractNew' })">
         <template #actions>
           <button class="btn-premium btn-outline inline-flex items-center gap-1.5" :disabled="loading || printing" @click="handlePrint">
@@ -263,18 +264,19 @@
         v-model="showCancelDialog"
         :contractStart="cancelDialogContract?.start_date || ''"
         :contractEnd="cancelDialogContract?.end_date || ''"
-        @confirm="handleCancelContract"
+        :onConfirm="handleCancelContract"
       />
 
-      <!-- Print Document (hidden, shown only during print) -->
-      <div v-if="printData" class="hidden print:block">
-        <ContractsListPrintDocument
-          :contracts="printData.contracts"
-          :appliedFilters="printData.appliedFilters"
-          :total="printData.total"
-          :lessorData="lessorData"
-        />
-      </div>
+    </div>
+
+    <!-- Source: contracts/page.tsx:948-957 — print document is a sibling with print-only class -->
+    <div v-if="printData" class="print-only">
+      <ContractsListPrintDocument
+        :contracts="printData.contracts"
+        :appliedFilters="printData.appliedFilters"
+        :total="printData.total"
+        :lessorData="lessorData"
+      />
     </div>
   </AppLayout>
 </template>
@@ -631,11 +633,13 @@ async function handleCancelContract(cancellationDate, reason) {
       cancellation_date: cancellationDate,
       reason: reason || undefined,
     })
-    showCancelDialog.value = false
-    cancelDialogContract.value = null
     fetchContracts()
   } catch (e) {
     toast.error(extractError(e))
+  } finally {
+    // Source: old project page.tsx:428-434 — close dialog on BOTH success and error
+    showCancelDialog.value = false
+    cancelDialogContract.value = null
   }
 }
 
@@ -783,13 +787,3 @@ onMounted(async () => {
   fetchContracts()
 })
 </script>
-
-<style scoped>
-@media print {
-  :deep(.app-layout > *:not(.print\:block)),
-  :deep(.app-layout nav),
-  :deep(.app-layout header) {
-    display: none !important;
-  }
-}
-</style>

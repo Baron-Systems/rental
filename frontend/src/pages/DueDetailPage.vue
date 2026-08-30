@@ -10,7 +10,7 @@
         <button class="btn-premium btn-outline mt-4" @click="router.push({ name: 'Dues' })">العودة للقائمة</button>
       </div>
 
-      <div v-else class="animate-fade-in space-y-6">
+      <div v-else class="animate-fade-in space-y-6" :class="{ 'print:hidden': printing }">
         <!-- Header card (source: dues/[id]/page.tsx:312-346) -->
         <div class="rounded-xl border border-ivory-300 bg-white p-6 shadow-soft">
           <div class="flex items-center gap-2 mb-4">
@@ -171,16 +171,22 @@
         </div>
       </div>
     </div>
+
+    <!-- Print Document (source: dues/[id]/page.tsx:460-468) -->
+    <div v-if="printing && due" class="due-print-document">
+      <DuePrintDocument :due="due" :lessor-data="lessorData" />
+    </div>
   </AppLayout>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import Card from '@/components/ui/Card.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import FormField from '@/components/ui/FormField.vue'
+import DuePrintDocument from '@/components/due/DuePrintDocument.vue'
 import { callApi, formatMoney, formatDate, extractError } from '@/composables/useApi'
 import { useSession } from '@/composables/useSession'
 import { useToast } from '@/composables/useToast'
@@ -196,6 +202,8 @@ const currency = computed(() => session.state.account?.settings?.currency || 'IL
 
 const due = ref(null)
 const loading = ref(true)
+const printing = ref(false)
+const lessorData = computed(() => session.state.account?.settings || null)
 const showWaiverModal = ref(false)
 const savingWaiver = ref(false)
 const editMode = ref(false)
@@ -435,29 +443,41 @@ async function cancelWaiver(w) {
   } catch (e) { toast.error(extractError(e)) }
 }
 
-function handlePrint() {
-  const d = due.value
-  const printWin = window.open('', '_blank')
-  printWin.document.write(`<html dir="rtl"><head><title>التزام ${d.due_number}</title></head><body>`)
-  printWin.document.write(`<h1>تفاصيل التزام</h1>`)
-  printWin.document.write(`<p><strong>رقم:</strong> ${d.due_number}</p>`)
-  printWin.document.write(`<p><strong>المستأجر:</strong> ${d.tenant_name || d.tenant}</p>`)
-  printWin.document.write(`<p><strong>النوع:</strong> ${d.due_type_name || d.due_type}</p>`)
-  printWin.document.write(`<p><strong>التاريخ:</strong> ${d.transaction_date || '—'}</p>`)
-  printWin.document.write(`<p><strong>تاريخ الاستحقاق:</strong> ${d.due_date || '—'}</p>`)
-  printWin.document.write(`<p><strong>المبلغ:</strong> ${d.amount || 0}</p>`)
-  if (d.description) printWin.document.write(`<p><strong>الوصف:</strong> ${d.description}</p>`)
-  if (d.calculation_method === 'metered') {
-    printWin.document.write(`<p><strong>قراءة سابقة:</strong> ${d.previous_meter_reading || 0}</p>`)
-    printWin.document.write(`<p><strong>قراءة حالية:</strong> ${d.current_meter_reading || 0}</p>`)
-    printWin.document.write(`<p><strong>الاستهلاك:</strong> ${d.meter_consumption || 0}</p>`)
-    printWin.document.write(`<p><strong>سعر الوحدة:</strong> ${d.unit_price || 0}</p>`)
-  }
-  printWin.document.write(`<p><strong>الحالة:</strong> ${d.status}</p>`)
-  printWin.document.write(`</body></html>`)
-  printWin.document.close()
-  printWin.print()
+// Print behavior (source: dues/[id]/page.tsx:86, 460-468 + usePrint.ts)
+// Same pattern as ReceiptDetailPage: set printing=true, wait for images, window.print()
+async function handlePrint() {
+  printing.value = true
+  await nextTick()
+  await waitForImages()
+  window.print()
+  printing.value = false
+}
+
+function waitForImages() {
+  return new Promise((resolve) => {
+    const images = Array.from(document.images).filter((img) => !img.complete)
+    if (images.length === 0) return resolve()
+    let finished = 0
+    const onFinish = () => { finished++; if (finished >= images.length) resolve() }
+    images.forEach((img) => {
+      img.addEventListener('load', onFinish)
+      img.addEventListener('error', onFinish)
+    })
+  })
 }
 
 onMounted(fetchDue)
 </script>
+
+<style scoped>
+/* Source: old dues/[id]/page.tsx — when printing, only the due document is visible.
+   The sidebar (print:hidden in AppLayout), header (print:hidden), and page content
+   (print:hidden when `printing` is true) are all hidden via Tailwind print variants.
+   Global print CSS in index.css handles layout unblocking and .print-document sizing. */
+@media print {
+  .due-print-document {
+    width: 100% !important;
+    max-width: none !important;
+  }
+}
+</style>

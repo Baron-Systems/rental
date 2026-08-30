@@ -1,10 +1,10 @@
 <template>
   <!-- Loading state (source: page.tsx:156-167) -->
   <div v-if="loading" class="min-h-screen flex items-center justify-center p-4" dir="rtl"
-       style="background: linear-gradient(135deg, #0a1530 0%, #0f1f42 50%, #060d1f 100%);">
+       style="background: linear-gradient(135deg, #012350);">
     <div class="text-center">
       <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl"
-           style="background: linear-gradient(135deg, #e3b94b, #d4a02c);">
+           style="background: #b38942;">
         <svg class="h-6 w-6 text-navy-900 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
@@ -18,7 +18,7 @@
   <div v-else-if="showSuccess"
        class="min-h-screen flex items-center justify-center p-4 transition-opacity duration-500"
        :class="isFadingOut ? 'opacity-0' : 'opacity-100'" dir="rtl"
-       style="background: linear-gradient(135deg, #0a1530 0%, #0f1f42 50%, #060d1f 100%);">
+       style="background: linear-gradient(135deg, #012350);">
     <div class="text-center">
       <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 animate-scale-in">
         <svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -34,17 +34,17 @@
 
   <!-- Main wizard (source: page.tsx:185-508) -->
   <div v-else class="min-h-screen flex items-center justify-center p-4" dir="rtl"
-       style="background: linear-gradient(135deg, #0a1530 0%, #0f1f42 50%, #060d1f 100%);">
+       style="background: linear-gradient(135deg, #012350);">
     <div class="absolute top-0 left-0 w-96 h-96 rounded-full opacity-10 blur-3xl"
-         style="background: radial-gradient(circle, #d4a02c, transparent);"></div>
+         style="background: radial-gradient(circle, #b38942, transparent);"></div>
     <div class="absolute bottom-0 right-0 w-96 h-96 rounded-full opacity-10 blur-3xl"
-         style="background: radial-gradient(circle, #e3b94b, transparent);"></div>
+         style="background: radial-gradient(circle, #c89a55, transparent);"></div>
 
     <div class="relative w-full max-w-2xl animate-scale-in">
       <!-- Header (source: page.tsx:188-195) -->
       <div class="mb-8 text-center">
         <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl shadow-soft-lg"
-             style="background: linear-gradient(135deg, #e3b94b, #d4a02c);">
+             style="background: #b38942;">
           <svg class="h-6 w-6 text-navy-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                   d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />

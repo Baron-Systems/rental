@@ -1,13 +1,13 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center p-4" dir="rtl" style="background: linear-gradient(135deg, #0a1530 0%, #0f1f42 50%, #060d1f 100%);">
+  <div class="min-h-screen flex items-center justify-center p-4" dir="rtl" style="background: #012350;">
     <!-- Decorative gold orbs -->
-    <div class="absolute top-0 left-0 w-96 h-96 rounded-full opacity-10 blur-3xl" style="background: radial-gradient(circle, #d4a02c, transparent);"></div>
-    <div class="absolute bottom-0 right-0 w-96 h-96 rounded-full opacity-10 blur-3xl" style="background: radial-gradient(circle, #e3b94b, transparent);"></div>
+    <div class="absolute top-0 left-0 w-96 h-96 rounded-full opacity-10 blur-3xl" style="background: radial-gradient(circle, #b38942, transparent);"></div>
+    <div class="absolute bottom-0 right-0 w-96 h-96 rounded-full opacity-10 blur-3xl" style="background: radial-gradient(circle, #c89a55, transparent);"></div>
 
     <div class="relative w-full max-w-md animate-scale-in">
       <!-- Logo -->
       <div class="text-center mb-8">
-        <div class="inline-flex w-16 h-16 rounded-2xl items-center justify-center mb-4 shadow-soft-lg" style="background: linear-gradient(135deg, #e3b94b, #d4a02c);">
+        <div class="inline-flex w-16 h-16 rounded-2xl items-center justify-center mb-4 shadow-soft-lg" style="background: #b38942;">
           <svg class="w-8 h-8 text-navy-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
           </svg>

@@ -1,18 +1,25 @@
 <template>
-  <div class="print-document bg-white p-8" dir="rtl">
+  <!--
+    Source: Rental_Management_olde/src/components/receipt/ReceiptPrintDocument.tsx
+    Colors matched to old project's CSS variables (globals.css):
+      --foreground (#002350), --muted-foreground (#656970), --muted (#F3F2F0),
+      --border (#E5E2DB), --success (#16875E), --destructive (#C63D3D), --card (#FFFFFF).
+    Font: IBM Plex Sans Arabic (old body font) — applied to print document only.
+  -->
+  <div class="receipt-print-document print-document bg-white p-8" dir="rtl">
     <PrintHeader :logo="lessorData?.logo" :name="lessorData?.name" />
 
-    <div class="print-keep-together border-b-2 border-navy-900 pb-4 mb-6">
-      <h1 class="text-2xl font-bold text-navy-900 text-center mb-4">سند قبض</h1>
+    <div class="print-keep-together border-b-2 rp-border pb-4 mb-6">
+      <h1 class="text-2xl font-bold rp-fg text-center mb-4">سند قبض</h1>
       <div class="grid grid-cols-2 gap-4 text-sm">
         <div class="space-y-1">
-          <div><span class="font-bold text-navy-900">رقم السند:</span> {{ receipt.receipt_number || '—' }}</div>
-          <div><span class="font-bold text-navy-900">التاريخ:</span> {{ formatDate(receipt.receipt_date) }}</div>
+          <div><span class="font-bold rp-fg">رقم السند:</span> {{ receipt.receipt_number || '—' }}</div>
+          <div><span class="font-bold rp-fg">التاريخ:</span> {{ formatDate(receipt.receipt_date) }}</div>
         </div>
         <div class="space-y-1 text-left">
-          <div><span class="font-bold text-navy-900">المستأجر:</span> {{ receipt.tenant_name || receipt.tenant || '-' }}</div>
+          <div><span class="font-bold rp-fg">المستأجر:</span> {{ receipt.tenant_name || receipt.tenant || '-' }}</div>
           <div v-if="receipt.contract_number || receipt.contract">
-            <span class="font-bold text-navy-900">رقم العقد:</span> {{ receipt.contract_number || receipt.contract }}
+            <span class="font-bold rp-fg">رقم العقد:</span> {{ receipt.contract_number || receipt.contract }}
           </div>
         </div>
       </div>
@@ -20,37 +27,37 @@
 
     <table class="w-full text-sm border-collapse print-table">
       <thead>
-        <tr class="bg-ivory-100 border-b border-navy-900">
-          <th class="px-3 py-2.5 text-right text-[13px] font-semibold text-navy-500 w-1/3">البيان</th>
-          <th class="px-3 py-2.5 text-right text-[13px] font-semibold text-navy-500">التفاصيل</th>
+        <tr class="rp-muted-bg border-b rp-border">
+          <th class="px-3 py-2.5 text-right text-[13px] font-semibold rp-muted-fg w-1/3">البيان</th>
+          <th class="px-3 py-2.5 text-right text-[13px] font-semibold rp-muted-fg">التفاصيل</th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(row, i) in rows" :key="i" class="border-b border-ivory-300">
-          <td class="px-3 py-2.5 text-[14px] font-medium text-navy-900">{{ row.label }}</td>
-          <td class="px-3 py-2.5 text-[14px] text-navy-900">{{ row.value }}</td>
+        <tr v-for="(row, i) in rows" :key="i" class="border-b rp-row-border">
+          <td class="px-3 py-2.5 text-[14px] font-medium rp-fg">{{ row.label }}</td>
+          <td class="px-3 py-2.5 text-[14px] rp-fg">{{ row.value }}</td>
         </tr>
       </tbody>
     </table>
 
-    <div class="print-totals mt-6 border-t-2 border-navy-900 pt-4 text-center text-sm">
-      <div class="font-bold text-navy-900 mb-1">المبلغ</div>
+    <div class="print-totals mt-6 border-t-2 rp-border pt-4 text-center text-sm">
+      <div class="font-bold rp-fg mb-1">المبلغ</div>
       <div
         class="text-lg font-bold"
-        :class="receipt.status === 'cancelled' ? 'text-navy-400 line-through' : 'text-emerald-600'"
+        :class="receipt.status === 'cancelled' ? 'rp-muted-fg line-through' : 'rp-success'"
       >
         {{ formatAmount(Number(receipt.amount)) }} {{ currencySymbol }} ({{ currencyLabel }})
       </div>
-      <div v-if="receipt.status === 'cancelled' && receipt.cancellation_reason" class="text-xs text-red-600 mt-1">
+      <div v-if="receipt.status === 'cancelled' && receipt.cancellation_reason" class="text-xs rp-destructive mt-1">
         ملغي - {{ receipt.cancellation_reason }}
       </div>
     </div>
 
     <div
       v-if="receipt.attachment && isImageAttachment(receipt.attachment)"
-      class="print-keep-together mt-8 border-t-2 border-navy-900 pt-4"
+      class="print-keep-together mt-8 border-t-2 rp-border pt-4"
     >
-      <div class="font-bold text-navy-900 mb-3 text-sm text-right">
+      <div class="font-bold rp-fg mb-3 text-sm text-right">
         {{ receipt.payment_method === 'cheque' ? 'صورة الشيك' : 'الصورة المرفقة' }}
       </div>
       <img
@@ -75,15 +82,17 @@ const props = defineProps({
 
 const currency = computed(() => props.lessorData?.currency || 'ILS')
 const currencyLabel = computed(() => {
-  const labels = { ILS: 'شيكل', USD: 'دولار', EUR: 'يورو', JOD: 'دينار', SAR: 'ريال', AED: 'درهم' }
+  // Source: old settings.ts getCurrencyLabel (lines 125-132) — exact match
+  const labels = { ILS: 'شيكل', JOD: 'دينار أردني', USD: 'دولار' }
   return labels[currency.value] || currency.value
 })
 const currencySymbol = computed(() => {
-  const symbols = { ILS: '₪', USD: '$', EUR: '€', JOD: 'د.أ', SAR: 'ر.س', AED: 'د.إ' }
-  return symbols[currency.value] || currency.value
+  // Source: old settings.ts getCurrencySymbol (lines 134-141) — exact match, default ''
+  const symbols = { ILS: '₪', JOD: 'JD', USD: '$' }
+  return symbols[currency.value] || ''
 })
 
-const methodLabels = { cash: 'نقداً', cheque: 'شيك', bank_transfer: 'تحويل بنكي', card: 'بطاقة' }
+const methodLabels = { cash: 'نقداُّ', cheque: 'شيك', bank_transfer: 'تحويل بنكي', card: 'بطاقة' }
 
 const rows = computed(() => {
   const r = props.receipt
@@ -111,6 +120,32 @@ function isImageAttachment(data) {
 </script>
 
 <style scoped>
+/*
+  Color values sourced from old project globals.css CSS variables (exact hex):
+    --foreground       = hsl(214 98% 16%)  = #002350
+    --muted-foreground = hsl(220 5% 42%)   = #656970
+    --muted            = hsl(43 10% 95%)   = #F3F2F0
+    --border           = hsl(40 16% 88%)   = #E5E2DB
+    --success          = hsl(158 72% 31%)  = #16875E
+    --destructive      = hsl(0 55% 51%)    = #C63D3D
+    --card             = hsl(0 0% 100%)    = #FFFFFF
+  Font: old body font-family = 'IBM Plex Sans Arabic' (globals.css:89).
+  Applied to receipt print document ONLY — does not affect the rest of the app.
+*/
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap');
+
+.receipt-print-document {
+  font-family: 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.rp-fg { color: #002350; }
+.rp-muted-fg { color: #656970; }
+.rp-muted-bg { background-color: #F3F2F0; }
+.rp-border { border-color: #002350; }
+.rp-row-border { border-color: #E5E2DB; }
+.rp-success { color: #16875E; }
+.rp-destructive { color: #C63D3D; }
+
 @media print {
   .print-table { border-collapse: collapse; }
   .print-keep-together { page-break-inside: avoid; }

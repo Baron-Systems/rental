@@ -70,31 +70,36 @@ def get_receipts(
 	if from_date and to_date and getdate(from_date) > getdate(to_date):
 		frappe.throw(frappe._("تاريخ البداية يجب أن يكون قبل أو يساوي تاريخ النهاية"))
 
-	filters = {}
+	# Use list-style filters to support multiple conditions on the same field
+	# (e.g. receipt_date >= X AND receipt_date <= Y). Dict-style would overwrite
+	# the first condition when the second is set. Source: route.ts:34-53.
+	filters = []
 	if account:
-		filters["rental_account"] = account
+		filters.append(["rental_account", "=", account])
 
 	if tenant:
-		filters["tenant"] = tenant
+		filters.append(["tenant", "=", tenant])
 	if contract:
-		filters["contract"] = contract
+		filters.append(["contract", "=", contract])
 	if payment_method and payment_method != "all":
-		filters["payment_method"] = payment_method
+		filters.append(["payment_method", "=", payment_method])
 	if search:
-		filters["receipt_number"] = ["like", f"%{search}%"]
+		filters.append(["receipt_number", "like", f"%{search}%"])
 
 	# Date filters (source: route.ts:44-53)
+	# receipt_date is a Date field, so end-of-day adjustment is not needed
+	# (old project used setUTCHours(23,59,59,999) because Prisma stored DateTime).
 	if from_date:
-		filters["receipt_date"] = [">=", from_date]
+		filters.append(["receipt_date", ">=", getdate(from_date)])
 	if to_date:
-		filters["receipt_date"] = ["<=", to_date]
+		filters.append(["receipt_date", "<=", getdate(to_date)])
 
 	if status == "approved":
-		filters["docstatus"] = 1
+		filters.append(["docstatus", "=", 1])
 	elif status == "cancelled":
-		filters["docstatus"] = 2
+		filters.append(["docstatus", "=", 2])
 	elif status == "draft":
-		filters["docstatus"] = 0
+		filters.append(["docstatus", "=", 0])
 
 	fields = [
 		"name", "receipt_number", "tenant", "contract", "building", "unit",
