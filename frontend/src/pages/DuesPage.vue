@@ -78,7 +78,7 @@
                     <label class="text-sm font-medium text-navy-800">نوع الالتزام <span class="text-red-500">*</span></label>
                     <select :value="newDue.due_type" @change="handleDueTypeChange($event.target.value)" class="input-premium" :disabled="!newDue.contract" required>
                       <option value="">{{ newDue.contract ? (formMode === 'contractual' ? 'اختر نوع الالتزام *' : 'اختر نوع إضافي *') : 'اختر العقد أولاّ' }}</option>
-                      <option v-for="opt in dueTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                      <option v-for="opt in dueTypeOptions" :key="opt.value" :value="opt.value" :disabled="opt.disabled">{{ opt.label }}</option>
                     </select>
                     <span v-if="formMode === 'contractual' && selectedCharge && selectedCharge.calculation_method !== 'metered'" class="mt-1 text-xs text-navy-400">
                       طريقة الاحتساب: <span class="text-navy-800">{{ getCalculationMethodLabel(selectedCharge.calculation_method) }}</span>
@@ -154,35 +154,72 @@
         </div>
       </div>
 
-      <!-- Inline edit modal -->
-      <Card v-if="editingDue" padding="lg" class="mb-4 animate-slide-up">
+      <!-- Inline edit modal (source: page.tsx:1187-1254) -->
+      <Card v-if="editingDue" padding="lg" class="mb-4 animate-scale-in">
         <template #title>تعديل التزام</template>
-        <form @submit.prevent="saveEdit" class="space-y-4">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="المبلغ" required>
-              <input v-model.number="editForm.amount" type="number" step="0.01" required class="input-premium" />
-            </FormField>
-            <FormField label="تاريخ الاستحقاق" required>
-              <input v-model="editForm.due_date" type="date" dir="ltr" required class="input-premium" />
-            </FormField>
-            <FormField label="الوصف">
-              <input v-model="editForm.description" type="text" class="input-premium" />
-            </FormField>
-            <template v-if="editingDue.calculation_method === 'metered'">
-              <FormField label="القراءة الحالية">
-                <input v-model.number="editForm.current_meter_reading" type="number" step="0.01" class="input-premium" />
-              </FormField>
-              <FormField label="سعر الوحدة">
-                <input v-model.number="editForm.unit_price" type="number" step="0.01" class="input-premium" />
-              </FormField>
-            </template>
+        <form @submit.prevent="saveEdit" class="space-y-3">
+          <div v-if="editError" class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ editError }}</div>
+          <!-- بيانات الربط (source: page.tsx:1192-1202) -->
+          <div>
+            <label class="mb-1.5 block text-xs font-semibold text-navy-400">بيانات الربط</label>
+            <div class="grid grid-cols-1 gap-2 md:grid-cols-3">
+              <div class="flex items-center gap-2 rounded-lg border border-ivory-300 bg-ivory-100/40 px-3 py-2.5 text-sm text-navy-900">
+                <svg class="h-4 w-4 text-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                <span>{{ editForm.tenant_name || '' }}</span>
+              </div>
+              <input type="text" :value="editForm.contract_label" readonly class="input-premium bg-ivory-100/40" />
+              <input type="text" :value="editForm.due_type_name" readonly class="input-premium bg-ivory-100/40" />
+            </div>
           </div>
-          <div class="flex gap-2 justify-end">
+
+          <!-- بيانات الالتزام (source: page.tsx:1204-1246) -->
+          <div>
+            <label class="mb-1.5 block text-xs font-semibold text-navy-400">بيانات الالتزام</label>
+            <div class="grid grid-cols-1 gap-2 md:grid-cols-3">
+              <input v-model="editForm.due_date" type="date" dir="ltr" class="input-premium" required />
+
+              <template v-if="editForm.is_metered">
+                <div class="col-span-1 md:col-span-3 rounded-lg border border-ivory-300 bg-ivory-100/40 p-2">
+                  <div class="mb-1.5 text-xs font-semibold text-navy-400">بيانات الاستهلاك</div>
+                  <div class="grid grid-cols-1 gap-2 md:grid-cols-3">
+                    <div class="flex flex-col gap-1">
+                      <label class="text-xs text-navy-400">القراءة السابقة</label>
+                      <input :value="editForm.previous_meter_reading" type="text" readonly class="input-premium bg-ivory-100/40" />
+                    </div>
+                    <div class="flex flex-col gap-1">
+                      <label class="text-xs text-navy-400">القراءة الحالية *</label>
+                      <input :value="editForm.current_meter_reading" @input="handleEditMeterInput($event.target.value, editForm.unit_price)" type="number" step="0.01" placeholder="القراءة الحالية *" class="input-premium" required />
+                    </div>
+                    <div class="flex flex-col gap-1">
+                      <label class="text-xs text-navy-400">الاستهلاك</label>
+                      <input :value="editForm.meter_consumption" type="text" readonly class="input-premium bg-ivory-100/40" />
+                    </div>
+                    <div class="flex flex-col gap-1">
+                      <label class="text-xs text-navy-400">سعر الوحدة *</label>
+                      <input :value="editForm.unit_price" @input="handleEditMeterInput(editForm.current_meter_reading, $event.target.value)" type="number" step="0.01" placeholder="سعر الوحدة *" class="input-premium" required />
+                    </div>
+                    <div class="flex flex-col gap-1">
+                      <label class="text-xs text-navy-400">المبلغ (تلقائي)</label>
+                      <input :value="editForm.amount" type="text" readonly class="input-premium bg-ivory-100/40" />
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <input v-model="editForm.amount" type="number" step="0.01" placeholder="المبلغ *" class="input-premium" required />
+              </template>
+
+              <input
+                v-model="editForm.description"
+                type="text"
+                :placeholder="editForm.is_additional ? 'أدخل سبب الالتزام الإضافي' : 'الوصف (اختياري)'"
+                class="input-premium"
+              />
+            </div>
+          </div>
+          <div class="mt-4 flex gap-2">
+            <button type="submit" class="btn-premium btn-gold">حفظ التعديل</button>
             <button type="button" class="btn-premium btn-outline" @click="editingDue = null">إلغاء</button>
-            <button type="submit" class="btn-premium btn-gold" :disabled="savingEdit">
-              <span v-if="savingEdit" class="w-4 h-4 border-2 border-navy-900/30 border-t-navy-900 rounded-full animate-spin"></span>
-              حفظ
-            </button>
           </div>
         </form>
       </Card>
@@ -297,8 +334,12 @@
                 {{ formatDate(d.due_date) }}
               </div>
             </TableCell>
-            <TableCell><span class="font-bold tabular-nums">{{ formatMoney(d.amount, currency) }}</span></TableCell>
-            <TableCell><StatusBadge :status="temporalStatus(d)" :label="temporalLabel[temporalStatus(d)]" /></TableCell>
+            <TableCell>
+              <DueAmountCell :due="d" />
+            </TableCell>
+            <TableCell>
+              <DueStatusCell :due="d" />
+            </TableCell>
             <TableCell align="center">
               <div class="flex items-center justify-center gap-1">
                 <router-link :to="`/dues/${d.name}`" class="w-8 h-8 rounded-lg flex items-center justify-center text-navy-500 hover:bg-gold-50 hover:text-gold-600 transition-colors" title="عرض">
@@ -307,13 +348,13 @@
                 <button v-if="d.status === 'draft' && ['manual', 'manual_contract', 'additional'].includes(d.source_type)" class="w-8 h-8 rounded-lg flex items-center justify-center text-gold-600 hover:bg-gold-50 transition-colors" title="تعديل" @click="startEdit(d)">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                 </button>
-                <button v-if="d.status === 'draft'" class="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-600 hover:bg-emerald-50 transition-colors" title="اعتماد" @click="approveDue(d)">
+                <button v-if="d.status === 'draft' && ['manual', 'manual_contract', 'additional'].includes(d.source_type)" class="w-8 h-8 rounded-lg flex items-center justify-center text-emerald-600 hover:bg-emerald-50 transition-colors" title="اعتماد" @click="approveDue(d)">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                 </button>
-                <button v-if="d.status === 'approved'" class="w-8 h-8 rounded-lg flex items-center justify-center text-amber-600 hover:bg-amber-50 transition-colors" title="إلغاء" @click="cancelDue(d)">
+                <button v-if="d.status === 'approved' && ['manual', 'manual_contract', 'additional'].includes(d.source_type)" class="w-8 h-8 rounded-lg flex items-center justify-center text-amber-600 hover:bg-amber-50 transition-colors" title="إلغاء" @click="cancelDue(d)">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
-                <button v-if="d.status === 'draft'" class="w-8 h-8 rounded-lg flex items-center justify-center text-red-600 hover:bg-red-50 transition-colors" title="حذف" @click="deleteDue(d)">
+                <button v-if="d.status === 'draft' && ['manual', 'manual_contract', 'additional'].includes(d.source_type)" class="w-8 h-8 rounded-lg flex items-center justify-center text-red-600 hover:bg-red-50 transition-colors" title="حذف" @click="deleteDue(d)">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                 </button>
               </div>
@@ -331,7 +372,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, h } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
@@ -428,8 +469,14 @@ const selectedFormTenantName = ref('')
 const createError = ref('')
 
 const editingDue = ref(null)
-const editForm = ref({ amount: null, due_date: '', description: '', current_meter_reading: null, unit_price: null })
+const editForm = ref({
+  amount: '', due_date: '', description: '',
+  previous_meter_reading: '', current_meter_reading: '', meter_consumption: '', unit_price: '',
+  is_metered: false, is_additional: false,
+  tenant_name: '', contract_label: '', due_type_name: '',
+})
 const savingEdit = ref(false)
+const editError = ref('')
 
 // ---- Create form computed (source: page.tsx:314-338) ----
 const selectedFormContract = computed(() =>
@@ -453,7 +500,11 @@ const selectedCharge = computed(() =>
 // Due type options based on mode (source: page.tsx:333-338)
 const dueTypeOptions = computed(() => {
   if (isContractualMode.value) {
-    return contractCharges.value.map((c) => ({ value: c.due_type_id, label: c.due_type_name || '' }))
+    return contractCharges.value.map((c) => ({
+      value: c.due_type_id,
+      label: `${c.due_type_name || ''}${c.disabled_reason ? ` — ${c.disabled_reason}` : ''}`,
+      disabled: !!c.disabled_reason,
+    }))
   }
   return additionalDueTypes.value.map((dt) => ({ value: dt.name, label: dt.due_type_name || '' }))
 })
@@ -480,7 +531,7 @@ function calculateMeterFields(prev, curr, price) {
   const c = parseFloat(curr || '0')
   const pr = parseFloat(price || '0')
   const consumption = (!isNaN(c) && !isNaN(p)) ? String(c - p) : ''
-  const amount = (consumption && !isNaN(pr)) ? (parseFloat(consumption) * pr).toFixed(2) : ''
+  const amount = (consumption && !isNaN(pr)) ? roundMoney(parseFloat(consumption) * pr).toFixed(2) : ''
   return { consumption, amount }
 }
 
@@ -557,7 +608,7 @@ function handleKindChange(mode) {
 
 function handleMeterInput(currentMeterReading, unitPrice) {
   const { consumption, amount } = calculateMeterFields(newDue.value.previous_meter_reading, currentMeterReading, unitPrice)
-  newDue.value = { ...newDue.value, current_meter_reading, unit_price, meter_consumption: consumption, amount }
+  newDue.value = { ...newDue.value, current_meter_reading: currentMeterReading, unit_price: unitPrice, meter_consumption: consumption, amount }
 }
 
 function openCreateModal() {
@@ -594,33 +645,151 @@ const temporalLabel = {
   pending: 'مستحق',
 }
 
+// Active waivers total (source: page.tsx:103-107)
+function activeWaiversTotal(d) {
+  return (d.waivers || [])
+    .filter((w) => w.status === 'active')
+    .reduce((sum, w) => sum + Number(w.amount), 0)
+}
+
+// Waiver status (source: page.tsx:109-114)
+function getWaiverStatus(d) {
+  const total = activeWaiversTotal(d)
+  if (total === 0) return null
+  if (total >= Number(d.amount)) return 'full'
+  return 'partial'
+}
+
+// DueAmountCell (source: page.tsx:116-131)
+const DueAmountCell = {
+  props: ['due'],
+  setup(props) {
+    return () => {
+      const original = Number(props.due.amount)
+      const waived = activeWaiversTotal(props.due)
+      const effective = Math.max(original - waived, 0)
+      if (waived === 0) {
+        return h('span', { class: 'font-bold tabular-nums' }, formatMoney(original, currency.value))
+      }
+      return h('div', { class: 'flex flex-col gap-0.5' }, [
+        h('span', { class: 'font-bold tabular-nums' }, formatMoney(effective, currency.value)),
+        h('span', { class: 'text-xs text-navy-400 line-through' }, formatMoney(original, currency.value)),
+      ])
+    }
+  },
+}
+
+// DueStatusCell (source: page.tsx:133-161)
+const DueStatusCell = {
+  props: ['due'],
+  setup(props) {
+    return () => {
+      const temporal = temporalStatus(props.due)
+      const waiverStatus = getWaiverStatus(props.due)
+      if (!waiverStatus) {
+        return h('div', { class: 'inline-flex min-h-[28px] items-center justify-start gap-1' }, [
+          h(StatusBadge, { status: temporal, label: temporalLabel[temporal] }),
+        ])
+      }
+      if (waiverStatus === 'full') {
+        return h('div', { class: 'inline-flex min-h-[28px] items-center justify-start gap-1' }, [
+          h(StatusBadge, { status: 'active', label: 'معفى بالكامل' }),
+        ])
+      }
+      return h('div', { class: 'inline-flex min-h-[28px] items-center justify-start gap-1' }, [
+        h(StatusBadge, { status: temporal, label: temporalLabel[temporal] }),
+        h('span', { class: 'inline-flex items-center rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600' }, 'معفى جزئياً'),
+      ])
+    }
+  },
+}
+
+// Source: page.tsx:812-835 — startEdit
 function startEdit(d) {
   editingDue.value = d
   editForm.value = {
-    amount: d.amount,
-    due_date: d.due_date || '',
+    amount: String(d.amount ?? ''),
+    due_date: d.due_date ? new Date(d.due_date).toISOString().split('T')[0] : '',
     description: d.description || '',
-    current_meter_reading: d.current_meter_reading ?? null,
-    unit_price: d.unit_price ?? null,
+    previous_meter_reading: d.previous_meter_reading != null ? String(d.previous_meter_reading) : '',
+    current_meter_reading: d.current_meter_reading != null ? String(d.current_meter_reading) : '',
+    meter_consumption: d.meter_consumption != null ? String(d.meter_consumption) : '',
+    unit_price: d.unit_price ? String(d.unit_price) : '',
+    is_metered: d.calculation_method === 'metered',
+    is_additional: d.source_type === 'additional',
+    tenant_name: d.tenant_name || '',
+    contract_label: d.contract_number || d.contract || '',
+    due_type_name: d.due_type_name || '',
+  }
+  editError.value = ''
+}
+
+// Source: page.tsx:1219,1227 — inline meter input handler for edit form
+function handleEditMeterInput(curr, price) {
+  const { consumption, amount } = calculateMeterFields(editForm.value.previous_meter_reading, curr, price)
+  editForm.value = {
+    ...editForm.value,
+    current_meter_reading: curr,
+    unit_price: price,
+    meter_consumption: consumption,
+    amount,
   }
 }
 
+// Source: page.tsx:837-867 — handleEditSubmit
 async function saveEdit() {
   savingEdit.value = true
+  editError.value = ''
   try {
     const payload = {}
-    if (editForm.value.amount !== null) payload.amount = editForm.value.amount
     if (editForm.value.due_date) payload.due_date = editForm.value.due_date
     if (editForm.value.description !== undefined) payload.description = editForm.value.description
-    if (editingDue.value.calculation_method === 'metered') {
-      if (editForm.value.current_meter_reading !== null) payload.current_meter_reading = editForm.value.current_meter_reading
-      if (editForm.value.unit_price !== null) payload.unit_price = editForm.value.unit_price
+
+    // Source: page.tsx:843-845 — additional requires description
+    if (editForm.value.is_additional) {
+      if (!editForm.value.description || editForm.value.description.trim() === '') {
+        editError.value = 'يرجى إدخال سبب الالتزام الإضافي'
+        savingEdit.value = false
+        return
+      }
     }
+
+    if (editForm.value.is_metered) {
+      // Source: page.tsx:847-856 — metered validation
+      if (editForm.value.current_meter_reading) payload.current_meter_reading = editForm.value.current_meter_reading
+      if (editForm.value.unit_price) payload.unit_price = editForm.value.unit_price
+      if (editForm.value.current_meter_reading && editForm.value.previous_meter_reading) {
+        const prev = parseFloat(editForm.value.previous_meter_reading || '0')
+        const curr = parseFloat(editForm.value.current_meter_reading)
+        if (isNaN(curr) || curr < prev) {
+          editError.value = 'القراءة الحالية يجب أن تكون أكبر من أو تساوي القراءة السابقة'
+          savingEdit.value = false
+          return
+        }
+      }
+    } else {
+      // Source: page.tsx:857-862 — non-metered amount validation
+      if (!editForm.value.amount || String(editForm.value.amount).trim() === '') {
+        editError.value = 'المبلغ مطلوب'
+        savingEdit.value = false
+        return
+      }
+      const amount = parseFloat(editForm.value.amount)
+      if (isNaN(amount) || amount <= 0) {
+        editError.value = 'المبلغ يجب أن يكون أكبر من صفر'
+        savingEdit.value = false
+        return
+      }
+      payload.amount = editForm.value.amount
+    }
+
     await callApi('rental.rental.api.due.update_due', { name: editingDue.value.name, ...payload })
     toast.success('تم تحديث الالتزام')
     editingDue.value = null
     fetchDues(pagination.value?.page || 1)
-  } catch (e) { toast.error(extractError(e)) } finally { savingEdit.value = false }
+  } catch (e) {
+    editError.value = extractError(e)
+  } finally { savingEdit.value = false }
 }
 
 let debounceTimer = null

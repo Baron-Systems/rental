@@ -54,8 +54,8 @@
           <div>
             <p class="text-xs text-navy-500">المدة</p>
             <p class="font-medium text-navy-900">
-              {{ formData.start_date && formData.end_date
-                ? `${formatDateDisplay(formData.start_date)} — ${formatDateDisplay(formData.end_date)}`
+              {{ (formData.start_date || formData.startDate) && (formData.end_date || formData.endDate)
+                ? `${formatDateDisplay(formData.start_date || formData.startDate)} — ${formatDateDisplay(formData.end_date || formData.endDate)}`
                 : '—' }}
             </p>
           </div>

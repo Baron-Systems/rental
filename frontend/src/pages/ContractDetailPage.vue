@@ -133,8 +133,8 @@
 
         <!-- Contract Balance: 3 StatCards (source: page.tsx:476-510) -->
         <div v-if="balance" class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <StatCard label="المستحقات" :value="formatMoney(balance.total_dues, currency)" icon="receipt" color="navy" />
-          <StatCard label="التحصيلات" :value="formatMoney(balance.total_receipts, currency)" icon="banknote" color="navy" />
+          <StatCard label="المستحقات" :value="formatMoney(balance.totalDues, currency)" icon="receipt" color="navy" />
+          <StatCard label="التحصيلات" :value="formatMoney(balance.totalReceipts, currency)" icon="banknote" color="navy" />
           <StatCard label="الرصيد" :value="formatMoney(balance.balance, currency)" icon="wallet" :color="balance.balance > 0 ? 'red' : (balance.balance < 0 ? 'green' : 'navy')" />
         </div>
 

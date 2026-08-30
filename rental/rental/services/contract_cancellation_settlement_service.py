@@ -23,7 +23,7 @@ class CancellationError(frappe.ValidationError):
 # Constants  (source: lines 28-29)
 # ---------------------------------------------------------------------------
 
-SYSTEM_CANCELLATION_REASON = "System cancellation due to contract cancellation settlement"
+SYSTEM_CANCELLATION_REASON = "تم إلغاء الالتزام تلقائيًا ضمن تسوية إلغاء العقد"
 SETTLEMENT_WAIVER_REASON = "تسوية إلغاء العقد"
 
 

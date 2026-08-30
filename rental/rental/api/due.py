@@ -249,6 +249,9 @@ def get_due(name):
 
 	result = due.as_dict()
 
+	# Add status field from docstatus (source: get_dues route.ts:83-88 does the same)
+	result["status"] = "approved" if result.get("docstatus") == 1 else ("cancelled" if result.get("docstatus") == 2 else "draft")
+
 	# Enrich nested objects (source: route.ts:12-19)
 	if result.get("tenant"):
 		result["tenant_name"] = frappe.db.get_value("Rental Tenant", result["tenant"], "full_name")
