@@ -12,6 +12,7 @@ from rental.rental.utils.date_utils import (
 	build_periodic_schedule,
 	round_money,
 )
+from rental.rental.services.archive_service import ensure_contract_not_archived
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +144,9 @@ def generate_contract_dues(contract_doc, account: str, generate: bool = True) ->
 	if status != "active" and status != "expired":
 		frappe.throw(frappe._("Contract must be active or expired"))
 
+	# Archive protection — blocks generating dues for archived contracts.
+	ensure_contract_not_archived(contract_doc.name, action="إنشاء التزامات")
+
 	# Check for existing auto_contract dues
 	existing = frappe.db.exists(
 		"Rental Due",
@@ -270,6 +274,9 @@ def regenerate_future_dues(contract_name: str, new_rent: float, from_date) -> li
 	if not frappe.db.exists("Lease Contract", contract_name):
 		frappe.throw(frappe._("Contract not found"))
 
+	# Archive protection — blocks regenerating dues for archived contracts.
+	ensure_contract_not_archived(contract_name, action="تعديل التزامات")
+
 	filters = {
 		"contract": contract_name,
 		"source_type": "auto_contract",
@@ -308,6 +315,9 @@ def cancel_future_dues(contract_name: str, from_date, reason: str, cancelled_by:
 	Returns the number of dues cancelled.
 	"""
 	from_date = to_calendar_day(from_date)
+
+	# Archive protection — blocks cancelling future dues for archived contracts.
+	ensure_contract_not_archived(contract_name, action="إلغاء التزامات")
 
 	future_dues = frappe.get_all(
 		"Rental Due",

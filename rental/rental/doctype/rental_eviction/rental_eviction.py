@@ -4,6 +4,7 @@ from frappe.model.document import Document
 from rental.rental.utils.account import get_current_rental_account, assert_account_access, is_system_manager
 from rental.rental.utils.date_utils import to_calendar_day
 from rental.rental.services.contract_validation import can_evict_contract
+from rental.rental.services.archive_service import ensure_contract_not_archived
 
 
 class RentalEviction(Document):
@@ -17,6 +18,9 @@ class RentalEviction(Document):
 		if not self.rental_account and not is_system_manager():
 			frappe.throw(frappe._("حساب الإيجار مطلوب"))
 		assert_account_access(self)
+
+		# Archive protection — blocks creating evictions for archived contracts.
+		ensure_contract_not_archived(self.contract, action="إنشاء إخلاء")
 
 		# Contract must be evictable
 		contract = frappe.get_doc("Lease Contract", self.contract)

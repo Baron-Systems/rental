@@ -214,11 +214,9 @@
                 <button v-if="canRenew(c)" class="w-8 h-8 rounded-lg flex items-center justify-center text-gold-600 hover:bg-gold-50 transition-colors" title="تجديد العقد" @click="router.push({ name: 'ContractRenew', params: { id: c.name } })">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                 </button>
-                <!-- 7. Archive/Unarchive (source: page.tsx:855-883) -->
-                <button v-if="c.is_archived" class="w-8 h-8 rounded-lg flex items-center justify-center text-navy-500 hover:bg-navy-50 transition-colors" title="إلغاء الأرشفة" @click="unarchiveContract(c)">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
-                </button>
-                <template v-else>
+                <!-- 7. Archive (source: page.tsx:855-883) -->
+                <!-- Unarchive removed: archive is now final closure. -->
+                <template v-if="!c.is_archived">
                   <button v-if="canArchive(c)" class="w-8 h-8 rounded-lg flex items-center justify-center text-navy-500 hover:bg-navy-50 transition-colors" title="أرشفة" @click="archiveContract(c)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
                   </button>
@@ -644,31 +642,34 @@ async function handleCancelContract(cancellationDate, reason) {
 }
 
 async function archiveContract(c) {
+  // Backend is the source of truth — fetch readiness first.
+  let readiness = null
+  try {
+    readiness = await callApi('rental.rental.api.contract.get_archive_readiness_api', { name: c.name })
+  } catch (e) { toast.error(extractError(e)); return }
+
+  if (!readiness.eligible) {
+    const reasons = (readiness.reasons && readiness.reasons.length)
+      ? readiness.reasons.join('\n')
+      : 'لا يمكن أرشفة العقد حاليًا'
+    await confirm({
+      title: 'لا يمكن أرشفة العقد',
+      message: reasons,
+      variant: 'danger',
+      confirmLabel: 'إغلاق',
+    })
+    return
+  }
+
   const ok = await confirm({
     title: 'أرشفة العقد',
-    message: 'سيتم إخفاء العقد من القائمة الافتراضية دون تغيير حالته أو بياناته. متابعة؟',
+    message: 'سيتم أرشفة العقد نهائيًا بعد التأكد من الإغلاق التشغيلي والمالي (الرصيد = صفر). يصبح العقد للقراءة فقط ولا يمكن التراجع عن هذا الإجراء.',
     variant: 'warning',
-    confirmLabel: 'أرشفة',
+    confirmLabel: 'أرشفة نهائية',
   })
   if (!ok) return
   try {
     await callApi('rental.rental.api.contract.archive_contract_api', { name: c.name })
-    fetchContracts()
-  } catch (e) {
-    toast.error(extractError(e))
-  }
-}
-
-async function unarchiveContract(c) {
-  const ok = await confirm({
-    title: 'إلغاء الأرشفة',
-    message: 'هل أنت متأكد من إلغاء أرشفة هذا العقد؟',
-    variant: 'warning',
-    confirmLabel: 'إلغاء الأرشفة',
-  })
-  if (!ok) return
-  try {
-    await callApi('rental.rental.api.contract.unarchive_contract_api', { name: c.name })
     fetchContracts()
   } catch (e) {
     toast.error(extractError(e))

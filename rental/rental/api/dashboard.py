@@ -15,6 +15,7 @@ from rental.rental.services.balance_service import (
 	get_approved_receipt_total,
 	get_tenant_balance,
 )
+from rental.rental.services.archive_service import get_archived_contract_names
 
 
 # ---------------------------------------------------------------------------
@@ -53,9 +54,20 @@ def get_dashboard():
 		"end_date": [">=", today],
 	}) if frappe.db.exists("DocType", "Lease Contract") else 0
 
-	# Financial totals
-	total_dues = get_effective_due_total({**base_filters, "due_date": ["<=", end_of_day]} if account else {"due_date": ["<=", end_of_day]})
-	total_receipts = get_approved_receipt_total({**base_filters, "receipt_date": ["<=", end_of_day]} if account else {"receipt_date": ["<=", end_of_day]})
+	# Financial totals — current outstanding portfolio.
+	# Exclude archived contracts: their balance is 0 by definition, and the
+	# dashboard KPIs represent the active portfolio, not historical totals.
+	due_filters = {"due_date": ["<=", end_of_day]}
+	receipt_filters = {"receipt_date": ["<=", end_of_day]}
+	if account:
+		due_filters["rental_account"] = account
+		receipt_filters["rental_account"] = account
+	archived_contracts = get_archived_contract_names(account)
+	if archived_contracts:
+		due_filters["contract"] = ["not in", archived_contracts]
+		receipt_filters["contract"] = ["not in", archived_contracts]
+	total_dues = get_effective_due_total(due_filters)
+	total_receipts = get_approved_receipt_total(receipt_filters)
 	total_balance = total_dues - total_receipts
 
 	# Tenants with balance
@@ -171,14 +183,19 @@ def get_notifications():
 
 	# --- Upcoming dues within next 7 days (take 20 — matches original) ---
 	if frappe.db.exists("DocType", "Rental Due"):
+		upcoming_due_filters = {
+			**base_filters,
+			"docstatus": 1,
+			"due_date": [">=", today],
+			"due_date": ["<=", week_ahead],
+		}
+		# Exclude dues of archived contracts from operational notifications.
+		archived_for_notif = get_archived_contract_names(account)
+		if archived_for_notif:
+			upcoming_due_filters["contract"] = ["not in", archived_for_notif]
 		upcoming_dues = frappe.get_all(
 			"Rental Due",
-			filters={
-				**base_filters,
-				"docstatus": 1,
-				"due_date": [">=", today],
-				"due_date": ["<=", week_ahead],
-			},
+			filters=upcoming_due_filters,
 			fields=["name", "due_number", "tenant", "due_type", "amount", "due_date"],
 			order_by="due_date asc",
 			limit=20,

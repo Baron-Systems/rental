@@ -45,6 +45,7 @@
             :mode="printing ? 'print' : 'preview'"
             :dues="dues"
             :lessorData="lessorData"
+            :isArchived="!!contract.is_archived"
           />
         </div>
       </div>

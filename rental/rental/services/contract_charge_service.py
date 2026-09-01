@@ -14,6 +14,7 @@ from rental.rental.utils.date_utils import (
 	calendar_day_diff,
 	FIXED_PERIODIC_FREQUENCIES,
 )
+from rental.rental.services.archive_service import ensure_contract_not_archived, is_contract_archived
 
 
 # Metered due type codes
@@ -439,6 +440,9 @@ def generate_fixed_periodic_dues(contract_doc, account: str) -> int:
 	if contract_doc.status not in ("active", "expired"):
 		frappe.throw(frappe._("Contract must be active or expired"))
 
+	# Archive protection — blocks generating fixed-periodic dues for archived contracts.
+	ensure_contract_not_archived(contract_doc.name, action="إنشاء التزامات دورية")
+
 	# Filter fixed_periodic tenant charges paid by landlord (or null)
 	# Source: contract-charge.service.ts:505-510
 	fixed_charges = [
@@ -665,6 +669,10 @@ def can_create_meter_due(contract_name: str, due_type_name: str) -> dict:
 	# 1. Contract not found
 	if not contract:
 		return {"ok": False, "error": frappe._("العقد غير موجود"), "contract": None, "charge": None}
+
+	# 1b. Archive protection — blocks creating meter dues for archived contracts.
+	if is_contract_archived(contract_name):
+		return {"ok": False, "error": frappe._("لا يمكن إنشاء التزام مترية لعقد مؤرشف"), "contract": None, "charge": None}
 
 	# 2. start > today
 	today = to_calendar_day(frappe.utils.today())

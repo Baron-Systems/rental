@@ -14,6 +14,7 @@ from rental.rental.services.contract_cancellation_settlement_service import (
 	resolve_due,
 	_get_unresolved_dues,
 )
+from rental.rental.services.archive_service import ensure_contract_not_archived
 
 
 @frappe.whitelist()
@@ -93,6 +94,11 @@ def complete_settlement(settlement_id=None, name=None):
 	sid = settlement_id or name
 	if not sid:
 		frappe.throw(frappe._("معرف التسوية مطلوب"))
+
+	# Archive protection — blocks completing settlements for archived contracts.
+	settlement_contract = frappe.db.get_value("Contract Cancellation Settlement", sid, "contract")
+	ensure_contract_not_archived(settlement_contract, action="إكمال تسوية إلغاء العقد")
+
 	account = get_current_rental_account()
 	complete_contract_cancellation_settlement(sid, account)
 	return {"settlement": sid, "status": "completed"}
@@ -129,6 +135,10 @@ def settle_item(settlement_id=None, item_id=None, decision=None, gross_settled_a
 		settlement_id = frappe.db.get_value("Cancellation Settlement Item", item_name, "parent")
 	if not settlement_id:
 		frappe.throw(frappe._("تعذر تحديد التسوية لعنصر التسوية"))
+
+	# Archive protection — blocks settling items for archived contracts.
+	settlement_contract = frappe.db.get_value("Contract Cancellation Settlement", settlement_id, "contract")
+	ensure_contract_not_archived(settlement_contract, action="تسوية عنصر إلغاء العقد")
 
 	settle_contract_cancellation_item(
 		settlement_id, item_name, decision, gross_settled_amount, reason
@@ -196,6 +206,9 @@ def resolve_settlement_due(settlement_id=None, due_id=None, period_start=None, p
 	existing_pe = frappe.db.get_value("Rental Due", due_id, "period_end")
 	if existing_ps and existing_pe:
 		frappe.throw(frappe._("الالتزام ليس مفتوح الفترة"))
+
+	# Archive protection — blocks resolving dues for archived contracts.
+	ensure_contract_not_archived(settlement_contract, action="استكمال تسوية إلغاء العقد")
 
 	account = get_current_rental_account()
 	resolve_due(settlement_name, due_id, period_start, period_end, account)

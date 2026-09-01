@@ -152,6 +152,13 @@ export function canEvictContract(contract) {
 
 /**
  * Source: utils.ts:220 canArchiveContract
+ *
+ * NOTE: After the archive-as-final-closure change, the Backend is the single
+ * source of truth for archive eligibility (operational + financial balance == 0).
+ * This function only controls whether the Archive button is *visible* — it
+ * returns true for any non-archived contract whose status looks operationally
+ * closed. The actual eligibility (including the balance == 0 check) is
+ * evaluated by `get_archive_readiness_api` and surfaced to the user on click.
  */
 export function canArchiveContract(contract) {
   const isArchived = contract.is_archived ?? contract.isArchived

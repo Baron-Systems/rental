@@ -9,6 +9,7 @@ import frappe
 
 from rental.rental.utils.date_utils import to_calendar_day, calendar_day_diff, round_money
 from rental.rental.services.balance_service import _db_sum
+from rental.rental.services.archive_service import ensure_contract_not_archived
 
 
 class CancellationError(frappe.ValidationError):
@@ -312,6 +313,9 @@ def settle_contract_cancellation_item(
 	if settlement.status == "completed":
 		raise CancellationError(frappe._("Settlement is already completed"), 409)
 
+	# Archive protection — blocks settling items for archived contracts.
+	ensure_contract_not_archived(settlement.contract, action="تسوية عنصر إلغاء العقد")
+
 	due = frappe.db.get_value(
 		"Rental Due", item.due,
 		["amount", "period_start", "period_end"],
@@ -379,6 +383,9 @@ def complete_contract_cancellation_settlement(settlement_name: str, account: str
 	# Legacy line 354: if (settlement.status === 'completed') return settlement
 	if settlement.status == "completed":
 		return settlement.as_dict()
+
+	# Archive protection — blocks completing settlements for archived contracts.
+	ensure_contract_not_archived(settlement.contract, action="إكمال تسوية إلغاء العقد")
 
 	cancel_date = to_calendar_day(settlement.cancellation_date)
 
@@ -556,6 +563,9 @@ def resolve_due(
 		raise CancellationError(
 			frappe._("يمكن تعيين الفترة فقط لالتزامات العقد التلقائية المعتمدة"), 403
 		)
+
+	# Archive protection — blocks resolving dues for archived contracts.
+	ensure_contract_not_archived(settlement.contract, action="استكمال تسوية إلغاء العقد")
 
 	# Update the due's period
 	frappe.db.set_value("Rental Due", due_id, {

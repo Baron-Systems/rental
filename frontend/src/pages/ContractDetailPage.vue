@@ -79,10 +79,6 @@
                 إلغاء العقد
               </button>
               <button v-if="canEvict" class="btn-premium btn-outline text-red-600 border-red-200 hover:bg-red-50" @click="handleEvict">إخلاء</button>
-              <button v-if="contract.is_archived" class="btn-premium btn-outline text-amber-600 border-amber-200 hover:bg-amber-50 inline-flex items-center gap-1.5" @click="unarchiveContract">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
-                إلغاء الأرشفة
-              </button>
               <button v-else-if="canArchive" class="btn-premium btn-ghost inline-flex items-center gap-1.5" @click="archiveContract">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
                 أرشفة
@@ -484,19 +480,34 @@ async function handleEvict() {
 }
 
 async function archiveContract() {
-  const ok = await confirm({ title: 'أرشفة العقد', message: 'سيتم إخفاء العقد من القائمة الافتراضية دون تغيير حالته أو بياناته. متابعة؟', variant: 'warning', confirmLabel: 'أرشفة' })
+  // Backend is the source of truth — fetch readiness first.
+  let readiness = null
+  try {
+    readiness = await callApi('rental.rental.api.contract.get_archive_readiness_api', { name: contract.value.name })
+  } catch (e) { toast.error(extractError(e)); return }
+
+  if (!readiness.eligible) {
+    const reasons = (readiness.reasons && readiness.reasons.length)
+      ? readiness.reasons.join('\n')
+      : 'لا يمكن أرشفة العقد حاليًا'
+    await confirm({
+      title: 'لا يمكن أرشفة العقد',
+      message: reasons,
+      variant: 'danger',
+      confirmLabel: 'إغلاق',
+    })
+    return
+  }
+
+  const ok = await confirm({
+    title: 'أرشفة العقد',
+    message: 'سيتم أرشفة العقد نهائيًا بعد التأكد من الإغلاق التشغيلي والمالي (الرصيد = صفر). يصبح العقد للقراءة فقط ولا يمكن التراجع عن هذا الإجراء.',
+    variant: 'warning',
+    confirmLabel: 'أرشفة نهائية',
+  })
   if (!ok) return
   try {
     await callApi('rental.rental.api.contract.archive_contract_api', { name: contract.value.name })
-    fetchContract()
-  } catch (e) { toast.error(extractError(e)) }
-}
-
-async function unarchiveContract() {
-  const ok = await confirm({ title: 'إلغاء الأرشفة', message: 'هل أنت متأكد من إلغاء أرشفة هذا العقد؟', variant: 'warning', confirmLabel: 'إلغاء الأرشفة' })
-  if (!ok) return
-  try {
-    await callApi('rental.rental.api.contract.unarchive_contract_api', { name: contract.value.name })
     fetchContract()
   } catch (e) { toast.error(extractError(e)) }
 }

@@ -14,6 +14,10 @@ from rental.rental.services.contract_charge_service import (
 	can_create_meter_due,
 )
 from rental.rental.services.cancellation_service import cancel_due
+from rental.rental.services.archive_service import (
+	ensure_contract_not_archived,
+	get_archived_contract_names,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +139,14 @@ def get_dues(
 	if search:
 		filters.append(["due_number", "like", f"%{search}%"])
 
+	# Exclude dues of archived contracts from the default operational list.
+	# When a specific contract is requested (e.g. the archived-contract detail
+	# page), we honor it so the historical file remains readable.
+	if not contract:
+		archived_contracts = get_archived_contract_names(account)
+		if archived_contracts:
+			filters.append(["contract", "not in", archived_contracts])
+
 	# --- Fields (source: route.ts:56-89) ---
 	fields = [
 		"name", "due_number", "tenant", "contract", "building", "unit",
@@ -218,10 +230,15 @@ def _get_due_stats(account, today=None):
 
 	Source: route.ts:162-168.
 	total excludes cancelled (status != cancelled).
+	Excludes dues of archived contracts (operational stats only).
 	"""
 	if today is None:
 		today = to_calendar_day(frappe.utils.today())
 	base = {"rental_account": account} if account else {}
+	# Exclude archived contracts from operational stats.
+	archived = get_archived_contract_names(account)
+	if archived:
+		base["contract"] = ["not in", archived]
 	return {
 		"total": frappe.db.count("Rental Due", {**base, "docstatus": ["!=", 2]}),
 		"draft": frappe.db.count("Rental Due", {**base, "docstatus": 0}),
@@ -364,6 +381,9 @@ def create_due(**kwargs):
 		frappe.throw(frappe._("العقد غير موجود"))
 	if contract.status not in ("active", "expired"):
 		frappe.throw(frappe._("لا يمكن إنشاء الالتزام لعقد غير نشط أو منتهٍ"))
+
+	# Archive protection — blocks creating dues for archived contracts.
+	ensure_contract_not_archived(contract_name, action="إنشاء التزام")
 
 	# Validate tenant/unit match (source: route.ts:240-245)
 	if kwargs.get("unit") and kwargs.get("unit") != contract.unit:
@@ -531,6 +551,9 @@ def update_due(name, **kwargs):
 	if due.docstatus != 0:
 		frappe.throw(frappe._("لا يمكن تعديل إلا المسودات"))
 
+	# Archive protection — blocks editing dues of archived contracts.
+	ensure_contract_not_archived(due.contract, action="تعديل التزام")
+
 	# Forbidden identity keys — must throw, not silently delete (source: route.ts:55-60)
 	forbidden_keys = ["due_type", "contract", "tenant", "unit", "source_type", "calculation_method"]
 	for k in forbidden_keys:
@@ -607,6 +630,9 @@ def delete_due(name):
 	if due.source_type not in ("manual", "manual_contract", "additional"):
 		frappe.throw(frappe._("لا يمكن حذف الالتزامات الناتجة من العقود"))
 
+	# Archive protection — blocks deleting dues of archived contracts.
+	ensure_contract_not_archived(due.contract, action="حذف التزام")
+
 	frappe.delete_doc("Rental Due", name, ignore_permissions=is_system_manager())
 	return {"success": True}
 
@@ -641,6 +667,9 @@ def approve_due(name):
 	contract_status = frappe.db.get_value("Lease Contract", due.contract, "status")
 	if contract_status not in ("active", "expired"):
 		frappe.throw(frappe._("لا يمكن اعتماد الالتزام لعقد غير نشط أو منتهٍ"))
+
+	# Archive protection — blocks approving dues of archived contracts.
+	ensure_contract_not_archived(due.contract, action="اعتماد التزام")
 
 	is_additional = due.source_type == "additional"
 	due_type = frappe.db.get_value(
@@ -758,6 +787,9 @@ def cancel_due_api(name, reason):
 	due = frappe.get_doc("Rental Due", name)
 	due.check_permission("cancel")
 
+	# Archive protection — blocks cancelling dues of archived contracts.
+	ensure_contract_not_archived(due.contract, action="إلغاء التزام")
+
 	cancelled = cancel_due(name, reason, frappe.session.user)
 	return {"due": cancelled}
 
@@ -814,6 +846,9 @@ def create_waiver(name, amount, reason):
 	# Status check (source: route.ts:57-59)
 	if due.docstatus != 1:
 		frappe.throw(frappe._("لا يمكن إعفاء إلا التزامات معتمدة"))
+
+	# Archive protection — blocks creating waivers for dues of archived contracts.
+	ensure_contract_not_archived(due.contract, action="إنشاء إعفاء")
 
 	# Check not linked to completed settlement (source: route.ts:61-71)
 	if frappe.db.exists("DocType", "Cancellation Settlement Item"):
@@ -879,6 +914,10 @@ def cancel_waiver(due_name, waiver_name, reason):
 	# Status check — only active waivers can be cancelled (source: route.ts:35-37)
 	if waiver.status != "active":
 		frappe.throw(frappe._("يمكن إلغاء الإعفاءات الفعالة فقط"))
+
+	# Archive protection — blocks cancelling waivers for dues of archived contracts.
+	_due_contract = frappe.db.get_value("Rental Due", due_name, "contract")
+	ensure_contract_not_archived(_due_contract, action="إلغاء إعفاء")
 
 	# Check not linked to completed settlement (source: route.ts:39-44)
 	if waiver.settlement_item:

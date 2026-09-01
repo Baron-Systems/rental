@@ -3,6 +3,7 @@ from frappe.model.document import Document
 
 from rental.rental.utils.account import get_current_rental_account, assert_account_access, is_system_manager
 from rental.rental.services.balance_service import _db_sum
+from rental.rental.services.archive_service import ensure_contract_not_archived
 
 
 class RentalDueWaiver(Document):
@@ -18,6 +19,12 @@ class RentalDueWaiver(Document):
 		if not self.rental_account and not is_system_manager():
 			frappe.throw(frappe._("Rental Account is required."))
 		assert_account_access(self)
+
+		# Archive protection — blocks creating waivers for dues of archived
+		# contracts. Resolve the contract via the linked due.
+		if self.due:
+			_due_contract = frappe.db.get_value("Rental Due", self.due, "contract")
+			ensure_contract_not_archived(_due_contract, action="إنشاء إعفاء")
 
 		# Manual waivers can only be created against auto_contract approved dues
 		if self.source_type == "manual" and self.due:

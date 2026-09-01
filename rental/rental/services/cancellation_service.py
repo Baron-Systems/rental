@@ -8,6 +8,7 @@ from __future__ import annotations
 import frappe
 
 from rental.rental.services.contract_charge_service import get_meter_field
+from rental.rental.services.archive_service import ensure_contract_not_archived
 
 
 def cancel_due(due_name: str, reason: str, cancelled_by: str):
@@ -28,6 +29,10 @@ def cancel_due(due_name: str, reason: str, cancelled_by: str):
 	# Check not already cancelled (legacy line 13, cancel/route.ts:33)
 	if due.docstatus == 2:
 		frappe.throw(frappe._("الالتزام ملغي مسبقاُ"))
+
+	# Archive protection — blocks cancelling dues of archived contracts
+	# (defense-in-depth for direct backend calls).
+	ensure_contract_not_archived(due.contract, action="إلغاء التزام")
 
 	# Only manual source types can be cancelled (legacy line 14)
 	if due.source_type not in ("manual", "manual_contract", "additional"):

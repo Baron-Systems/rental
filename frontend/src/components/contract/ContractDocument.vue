@@ -12,6 +12,14 @@
       تجديد للعقد: <strong>{{ previousContractNumber }}</strong>
     </div>
 
+    <!-- Archived banner (final closure indicator) -->
+    <div
+      v-if="isArchived"
+      class="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 print-keep-together"
+    >
+      <strong>عقد مؤرشف نهائيًا</strong> — تم الإغلاق المالي والتشغيلي. هذا العقد للقراءة فقط.
+    </div>
+
     <!-- Print Header — only rendered in print mode -->
     <div
       v-if="showPrintHeader && lessorData"
@@ -449,6 +457,7 @@ const props = defineProps({
   previousContractNumber: { type: String, default: '' },
   lessorData: { type: Object, default: null },
   showPrintHeader: { type: Boolean, default: null },
+  isArchived: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:modelValue'])

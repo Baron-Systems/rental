@@ -32,7 +32,11 @@ from rental.rental.services.renewal_service import (
 	close_previous_contract_by_renewal,
 	get_renewal_first_due_date,
 )
-from rental.rental.services.archive_service import archive_contract, unarchive_contract
+from rental.rental.services.archive_service import (
+	archive_contract,
+	unarchive_contract,
+	get_archive_readiness,
+)
 from rental.rental.doctype.rental_settings.rental_settings import (
 	generate_contract_number,
 	build_lessor_snapshot,
@@ -980,11 +984,26 @@ def archive_contract_api(name):
 
 
 @frappe.whitelist()
+def get_archive_readiness_api(name):
+	"""Get archive readiness for a contract.
+
+	Source of truth for whether a contract can be archived. The frontend
+	must consume this and must NOT re-implement the business logic.
+	Returns ``{ eligible, reasons, operationally_closed, financially_closed,
+	balance, balance_breakdown }``.
+	"""
+	if not frappe.db.exists("Lease Contract", name):
+		frappe.throw(frappe._("العقد غير موجود"))
+	return get_archive_readiness(name)
+
+
+@frappe.whitelist()
 def unarchive_contract_api(name):
 	"""Unarchive a contract.
 
-	Source: ``POST /api/contracts/[id]/unarchive``.
-	Returns the full contract object.
+	NOTE: After the archive-as-final-closure change, unarchive is no longer
+	exposed to end users (the UI button is removed). This endpoint is kept
+	for internal/technical use only.
 	"""
 	unarchive_contract(name)
 	return {"contract": _contract_response_object(name)}

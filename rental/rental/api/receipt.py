@@ -10,6 +10,10 @@ import frappe
 from frappe.utils import getdate
 
 from rental.rental.utils.account import get_current_rental_account, is_system_manager
+from rental.rental.services.archive_service import (
+	ensure_contract_not_archived,
+	get_archived_contract_names,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -101,6 +105,14 @@ def get_receipts(
 	elif status == "draft":
 		filters.append(["docstatus", "=", 0])
 
+	# Exclude receipts of archived contracts from the default operational list.
+	# When a specific contract is requested (e.g. the archived-contract detail
+	# page), we honor it so the historical file remains readable.
+	if not contract:
+		archived_contracts = get_archived_contract_names(account)
+		if archived_contracts:
+			filters.append(["contract", "not in", archived_contracts])
+
 	fields = [
 		"name", "receipt_number", "tenant", "contract", "building", "unit",
 		"receipt_date", "amount", "payment_method", "reference_number",
@@ -150,6 +162,10 @@ def get_receipts(
 
 def _get_receipt_stats(account):
 	base = {"rental_account": account} if account else {}
+	# Exclude archived contracts from operational stats.
+	archived = get_archived_contract_names(account)
+	if archived:
+		base["contract"] = ["not in", archived]
 	return {
 		"total": frappe.db.count("Rental Receipt", base),
 		"approved": frappe.db.count("Rental Receipt", {**base, "docstatus": 1}),
@@ -194,6 +210,9 @@ def create_receipt(**kwargs):
 	if payment_method not in ("cash", "cheque"):
 		frappe.throw(frappe._("طريقة الدفع غير صالحة"))
 
+	# Archive protection — blocks creating receipts for archived contracts.
+	ensure_contract_not_archived(kwargs.get("contract"), action="إنشاء سند قبض")
+
 	receipt_data = {
 		"doctype": "Rental Receipt",
 		"rental_account": account,
@@ -236,6 +255,9 @@ def update_receipt(name, **kwargs):
 	for f in forbidden:
 		if f in kwargs:
 			frappe.throw(frappe._("لا يمكن تغيير بيانات هوية السند"))
+
+	# Archive protection — blocks editing receipts of archived contracts.
+	ensure_contract_not_archived(receipt.contract, action="تعديل سند قبض")
 
 	# Determine effective payment method (source: route.ts:52)
 	payment_method = kwargs.get("payment_method")
@@ -301,6 +323,9 @@ def delete_receipt(name):
 	if receipt.docstatus != 0:
 		frappe.throw(frappe._("لا يمكن حذف إلا مسودات سند القبض"))
 
+	# Archive protection — blocks deleting receipts of archived contracts.
+	ensure_contract_not_archived(receipt.contract, action="حذف سند قبض")
+
 	frappe.delete_doc("Rental Receipt", name, ignore_permissions=is_system_manager())
 	return {"success": True}
 
@@ -321,6 +346,9 @@ def approve_receipt(name):
 
 	if receipt.docstatus != 0:
 		frappe.throw(frappe._("يمكن اعتماد المسودات فقط"))
+
+	# Archive protection — blocks approving receipts of archived contracts.
+	ensure_contract_not_archived(receipt.contract, action="اعتماد سند قبض")
 
 	# Validate amount (source: route.ts:53-55)
 	if not receipt.amount or float(receipt.amount) <= 0:
@@ -359,6 +387,9 @@ def cancel_receipt(name, reason):
 
 	if receipt.docstatus != 1:
 		frappe.throw(frappe._("يمكن إلغاء السندات المعتمدة فقط"))
+
+	# Archive protection — blocks cancelling receipts of archived contracts.
+	ensure_contract_not_archived(receipt.contract, action="إلغاء سند قبض")
 
 	# Validate reason (source: cancellationSchema, validation.ts:322-324)
 	# z.string().min(1) rejects empty/None but accepts non-empty strings incl. whitespace

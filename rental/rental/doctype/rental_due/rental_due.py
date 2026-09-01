@@ -3,6 +3,7 @@ from frappe.model.document import Document
 
 from rental.rental.utils.account import get_current_rental_account, assert_account_access, is_system_manager
 from rental.rental.utils.date_utils import to_calendar_day, round_money
+from rental.rental.services.archive_service import ensure_contract_not_archived
 
 
 class RentalDue(Document):
@@ -16,6 +17,11 @@ class RentalDue(Document):
 		if not self.rental_account and not is_system_manager():
 			frappe.throw(frappe._("Rental Account is required."))
 		assert_account_access(self)
+
+		# Archive protection — blocks create/edit on dues of archived contracts.
+		# Auto-generation sets flags.from_generation = True; those paths still
+		# must respect the archive lock, so we do NOT exempt them.
+		ensure_contract_not_archived(self.contract, action="إنشاء أو تعديل التزام")
 
 		# Auto-contract dues cannot be edited individually
 		if self.source_type == "auto_contract" and not self.is_new() and not self.flags.from_generation:
@@ -35,6 +41,9 @@ class RentalDue(Document):
 
 	def on_submit(self):
 		"""On approval (submit): generate due_number if not set, update unit meter."""
+		# Archive protection — blocks approving dues of archived contracts.
+		ensure_contract_not_archived(self.contract, action="اعتماد التزام")
+
 		if not self.due_number:
 			from rental.rental.doctype.rental_settings.rental_settings import generate_due_number
 			self.due_number = generate_due_number(self.rental_account)
@@ -46,6 +55,9 @@ class RentalDue(Document):
 
 	def on_cancel(self):
 		"""On cancellation: record cancellation metadata, rollback meter if metered."""
+		# Archive protection — blocks cancelling dues of archived contracts.
+		ensure_contract_not_archived(self.contract, action="إلغاء التزام")
+
 		if not self.cancellation_reason:
 			frappe.throw(frappe._("سبب الإلغاء مطلوب"))
 
