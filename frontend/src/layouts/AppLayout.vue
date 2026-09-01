@@ -18,11 +18,11 @@
       <!-- Logo / Brand -->
       <div class="px-6 py-5 border-b border-white/[0.06]">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style="background: #b38942;">
-            <svg class="w-5 h-5 text-navy-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-            </svg>
-          </div>
+          <img
+            src="/images/albaron-logo.png"
+            alt="ALBaron Systems"
+            class="object-contain w-[52px] h-auto shrink-0"
+          />
           <div>
             <h1 class="text-base font-bold text-white tracking-tight">نظام الإيجار</h1>
             <p v-if="session.state.account" class="text-[11px] text-gold-400/70 font-medium mt-0.5 truncate max-w-[160px]">
