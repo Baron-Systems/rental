@@ -852,41 +852,96 @@ def cancel_contract(name, cancellation_date, reason=None):
 	if not cancellation_date:
 		frappe.throw(frappe._("تاريخ الإلغاء مطلوب"))
 
-	# Cancellation date must be within [startDate, endDate]
+	# Validate contract dates and cancellation date
 	cancel_date = to_calendar_day(cancellation_date)
 	start = to_calendar_day(contract.start_date)
 	end = to_calendar_day(contract.end_date)
-	if cancel_date < start or cancel_date > end:
-		frappe.throw(frappe._("تاريخ الإلغاء خارج فترة العقد"))
+
+	# Invalid contract data: start >= end
+	if start >= end:
+		frappe.throw(frappe._("فترة العقد غير صحيحة (تاريخ البداية بعد أو يساوي تاريخ النهاية)"))
+
+	# Cancellation date must not be after end_date.
+	# Before-start cancellation (cancel_date < start_date) is allowed.
+	if cancel_date > end:
+		frappe.throw(frappe._("تاريخ الإلغاء يجب أن يكون قبل أو يساوي تاريخ نهاية العقد"))
+
+	is_before_start = cancel_date < start
 
 	# Update contract status — use the normalized cancel_date as cancelled_at
 	# Source: cancel/route.ts:64-71 — cancelledAt: cancellationDate (normalized)
+	# IMPORTANT: status must be set to "cancelled" BEFORE clearing
+	# closed_by_renewal_at on the previous contract, so that
+	# close_expired_contracts_by_renewal / expire_contracts filters
+	# (which exclude cancelled contracts) skip this renewal.
 	frappe.db.set_value("Lease Contract", name, {
 		"status": "cancelled",
 		"cancelled_at": cancel_date,
 		"cancellation_reason": reason,
 	}, update_modified=False)
 
-	# Create cancellation settlement — pass normalized cancel_date
-	# Source: cancel/route.ts:73-81 — cancellationDate is the normalized date
-	from rental.rental.services.contract_cancellation_settlement_service import (
-		create_contract_cancellation_settlement,
-	)
-	settlement_name = create_contract_cancellation_settlement(name, cancel_date, reason or "", account)
+	if is_before_start:
+		# Before-start cancellation: cancel all approved dues for this contract.
+		# No settlement is needed — the contract hasn't started, so all dues
+		# are future and none are "current".
+		from rental.rental.services.contract_cancellation_settlement_service import (
+			_system_cancel_due_and_waivers,
+			SYSTEM_CANCELLATION_REASON,
+		)
+		all_dues = frappe.get_all(
+			"Rental Due",
+			filters={"contract": name, "docstatus": 1},
+			pluck="name",
+		)
+		for due_name in all_dues:
+			_system_cancel_due_and_waivers(due_name, SYSTEM_CANCELLATION_REASON)
+		settlement_name = None
+	else:
+		# After-start cancellation: create cancellation settlement (current behavior)
+		# Source: cancel/route.ts:73-81 — cancellationDate is the normalized date
+		from rental.rental.services.contract_cancellation_settlement_service import (
+			create_contract_cancellation_settlement,
+		)
+		settlement_name = create_contract_cancellation_settlement(name, cancel_date, reason or "", account)
+
+	# Renewal restoration: if this contract is a renewal that closed the previous
+	# contract via closed_by_renewal_at, clear that timestamp so the previous
+	# contract returns to its normal lifecycle rules.
+	# Only the immediate previous contract is affected (A → B → C: cancelling C
+	# only restores B, not A).
+	if contract.renewed_from_contract:
+		previous_name = contract.renewed_from_contract
+		closed_at = frappe.db.get_value("Lease Contract", previous_name, "closed_by_renewal_at")
+		if closed_at:
+			# Safety: only clear if no other approved renewal exists for the
+			# previous contract (excluding the one being cancelled now).
+			other_approved = frappe.db.exists("Lease Contract", {
+				"renewed_from_contract": previous_name,
+				"status": ["not in", ["draft", "cancelled", "evicted"]],
+				"name": ["!=", name],
+			})
+			if not other_approved:
+				frappe.db.set_value(
+					"Lease Contract", previous_name,
+					"closed_by_renewal_at", None, update_modified=False,
+				)
 
 	# Recalculate unit status
 	recalculate_unit_status(contract.unit)
 
-	# Build settlement response object (source: route.ts:83 returns full settlement)
-	settlement_doc = frappe.get_doc("Contract Cancellation Settlement", settlement_name).as_dict()
-	settlement_items = settlement_doc.get("settlement_items", []) or settlement_doc.get("items", [])
-	settlement_response = {
-		"id": settlement_name,
-		"name": settlement_name,
-		"status": settlement_doc.get("status") or "pending",
-		"unresolved_count": sum(1 for it in settlement_items if it.get("status") != "decided"),
-		**settlement_doc,
-	}
+	if settlement_name:
+		# Build settlement response object (source: route.ts:83 returns full settlement)
+		settlement_doc = frappe.get_doc("Contract Cancellation Settlement", settlement_name).as_dict()
+		settlement_items = settlement_doc.get("settlement_items", []) or settlement_doc.get("items", [])
+		settlement_response = {
+			"id": settlement_name,
+			"name": settlement_name,
+			"status": settlement_doc.get("status") or "pending",
+			"unresolved_count": sum(1 for it in settlement_items if it.get("status") != "decided"),
+			**settlement_doc,
+		}
+	else:
+		settlement_response = None
 
 	return {
 		"contract": _contract_response_object(name),

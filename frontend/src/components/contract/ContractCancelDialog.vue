@@ -63,7 +63,7 @@
               <button
                 type="submit"
                 class="btn-premium bg-red-600 text-white hover:bg-red-700 text-sm"
-                :disabled="loading || !reason.trim() || !isWithinContract"
+                :disabled="loading || !reason.trim() || !cancellationDate"
               >
                 {{ loading ? 'جارٍ...' : 'تأكيد الإلغاء' }}
               </button>
@@ -76,7 +76,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -114,14 +114,6 @@ function formatDate(value) {
   return `${day}/${month}/${d.getFullYear()}`
 }
 
-const isWithinContract = computed(() => {
-  const start = toCalendarDay(props.contractStart)
-  const end = toCalendarDay(props.contractEnd)
-  const selected = toCalendarDay(cancellationDate.value)
-  if (!start || !end || !selected) return false
-  return selected >= start && selected <= end
-})
-
 watch(() => props.modelValue, (val) => {
   if (val) {
     cancellationDate.value = toISODate(new Date())
@@ -137,10 +129,24 @@ async function handleSubmit() {
     error.value = 'تاريخ الإلغاء مطلوب'
     return
   }
-  if (!isWithinContract.value) {
-    error.value = `تاريخ الإلغاء يجب أن يكون بين ${formatDate(props.contractStart)} و ${formatDate(props.contractEnd)}`
+
+  const start = toCalendarDay(props.contractStart)
+  const end = toCalendarDay(props.contractEnd)
+  const selected = toCalendarDay(cancellationDate.value)
+
+  // Invalid contract data: start >= end
+  if (start && end && start >= end) {
+    error.value = 'فترة العقد غير صحيحة (تاريخ البداية بعد أو يساوي تاريخ النهاية). يرجى تصحيح بيانات العقد قبل الإلغاء.'
     return
   }
+
+  // Cancellation date must not be after end_date.
+  // Before-start cancellation (selected < start) is allowed.
+  if (end && selected && selected > end) {
+    error.value = `تاريخ الإلغاء يجب أن يكون قبل أو يساوي ${formatDate(props.contractEnd)}`
+    return
+  }
+
   if (!reason.value.trim()) {
     error.value = 'سبب الإلغاء مطلوب'
     return

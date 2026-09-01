@@ -449,13 +449,18 @@ async function handleCancelContract(cancellationDate, reason) {
   if (!cancellationDate) { toast.error('يرجى تحديد تاريخ الإلغاء'); return }
   cancelling.value = true
   try {
-    await callApi('rental.rental.api.contract.cancel_contract', {
+    const result = await callApi('rental.rental.api.contract.cancel_contract', {
       name: contract.value.name,
       cancellation_date: cancellationDate,
       reason: reason || undefined,
     })
-    // Source: page.tsx:237-238 — navigate to settlement page after cancel
-    router.push({ name: 'ContractSettlement', params: { id: contract.value.name } })
+    // Navigate to settlement page only if a settlement was created (after-start).
+    // Before-start cancellation has no settlement — refresh the contract page.
+    if (result && result.settlement) {
+      router.push({ name: 'ContractSettlement', params: { id: contract.value.name } })
+    } else {
+      await fetchContract()
+    }
   } catch (e) {
     toast.error(extractError(e))
   } finally {
