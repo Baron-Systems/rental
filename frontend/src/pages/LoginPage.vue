@@ -6,14 +6,13 @@
 
     <div class="relative w-full max-w-md animate-scale-in">
       <!-- Logo -->
-      <div class="text-center mb-8">
+      <div class="text-center mb-10">
         <img
           src="/images/albaron-logo-login.png"
           alt="AL BARON"
-          class="object-contain w-[240px] max-w-[80%] h-auto mx-auto mb-4"
+          class="object-contain w-[220px] max-w-[80%] h-auto mx-auto mb-3"
         />
-        <h1 class="text-2xl font-bold text-white tracking-tight">نظام الإيجار</h1>
-        <p class="text-gold-400/70 text-sm font-medium mt-1">تسجيل الدخول إلى حسابك</p>
+        <p class="text-gold-400 text-base font-semibold tracking-tight">تسجيل الدخول إلى حسابك</p>
       </div>
 
       <!-- Card -->
@@ -31,7 +30,7 @@
             {{ error }}
           </div>
 
-          <button type="submit" class="btn-premium btn-gold w-full" :disabled="loading">
+          <button type="submit" class="btn-premium btn-gold w-full font-bold" :disabled="loading">
             <span v-if="loading" class="w-4 h-4 border-2 border-navy-900/30 border-t-navy-900 rounded-full animate-spin"></span>
             {{ loading ? 'جاري الدخول...' : 'تسجيل الدخول' }}
           </button>

@@ -73,6 +73,19 @@ body {
   color: #b0b0b0;
 }
 
+/* Neutralize browser autofill background (blue/yellow) so email & password
+   inputs stay visually identical. Keeps the premium white background and
+   navy text regardless of autofill state. */
+.input-premium:-webkit-autofill,
+.input-premium:-webkit-autofill:hover,
+.input-premium:-webkit-autofill:focus,
+.input-premium:-webkit-autofill:active {
+  -webkit-text-fill-color: #012350;
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  caret-color: #012350;
+  transition: background-color 9999s ease-out 0s;
+}
+
 textarea.input-premium {
   height: auto;
   padding-block: 12px;
