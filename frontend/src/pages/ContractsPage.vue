@@ -128,17 +128,6 @@
         </div>
       </Card>
 
-      <!-- Eviction banner -->
-      <button
-        v-if="stats && stats.eviction > 0 && filters.status !== 'evicted' && !filters.eviction"
-        type="button"
-        class="mb-4 inline-flex w-full items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-100 sm:w-auto"
-        @click="activateEvictionFilter"
-      >
-        <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        {{ stats.eviction === 1 ? 'يوجد عقد واحد بانتظار الإخلاء' : `يوجد ${stats.eviction} عقود بانتظار الإخلاء` }}
-      </button>
-
       <!-- Table -->
       <Card padding="none">
         <div v-if="loading" class="flex items-center justify-center py-16">
