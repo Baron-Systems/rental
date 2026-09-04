@@ -138,9 +138,12 @@ class TestProperties(FrappeTestCase):
 		self.assertEqual(building.building_name, "CRUD Building")
 		self.assertEqual(building.rental_account, self.account_a)
 
+		# Building data is read-only after creation — editing building_name must raise PermissionError
 		building.building_name = "Updated Building"
-		building.save(ignore_permissions=True)
-		self.assertEqual(frappe.db.get_value("Rental Building", name, "building_name"), "Updated Building")
+		with self.assertRaises(frappe.PermissionError):
+			building.save(ignore_permissions=True)
+		# Verify the name was NOT changed in the database
+		self.assertEqual(frappe.db.get_value("Rental Building", name, "building_name"), "CRUD Building")
 
 		frappe.delete_doc("Rental Building", name, ignore_permissions=True)
 		self.assertFalse(frappe.db.exists("Rental Building", name))
@@ -156,9 +159,12 @@ class TestProperties(FrappeTestCase):
 		self.assertEqual(floor_doc.floor_name, "Ground Floor")
 		self.assertEqual(floor_doc.rental_account, self.account_a)
 
+		# Floor data is read-only after creation — editing floor_name must raise PermissionError
 		floor_doc.floor_name = "Updated Floor"
-		floor_doc.save(ignore_permissions=True)
-		self.assertEqual(frappe.db.get_value("Rental Floor", floor, "floor_name"), "Updated Floor")
+		with self.assertRaises(frappe.PermissionError):
+			floor_doc.save(ignore_permissions=True)
+		# Verify the name was NOT changed in the database
+		self.assertEqual(frappe.db.get_value("Rental Floor", floor, "floor_name"), "Ground Floor")
 
 		frappe.delete_doc("Rental Floor", floor, ignore_permissions=True)
 		self.assertFalse(frappe.db.exists("Rental Floor", floor))
