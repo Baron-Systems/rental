@@ -29,7 +29,7 @@
             <div class="flex items-center gap-3">
               <span class="w-2 h-2 rounded-full" :class="statusDot(unit)"></span>
               <span class="text-sm font-medium text-navy-800">{{ unit.unit_number }}</span>
-              <span class="text-xs text-navy-400">{{ unitTypeLabel(unit.unit_type) }}</span>
+              <span class="text-xs text-navy-400">{{ unit.unit_type_name || '' }}</span>
               <StatusBadge v-if="!unit.is_active" status="inactive" />
             </div>
             <StatusBadge :status="unit.status || 'empty'" />
@@ -58,7 +58,7 @@
             <div class="flex items-center gap-3">
               <span class="w-2 h-2 rounded-full" :class="statusDot(unit)"></span>
               <span class="text-sm font-medium text-navy-800">{{ unit.unit_number }}</span>
-              <span class="text-xs text-navy-400">{{ unitTypeLabel(unit.unit_type) }}</span>
+              <span class="text-xs text-navy-400">{{ unit.unit_type_name || '' }}</span>
               <StatusBadge v-if="!unit.is_active" status="inactive" />
             </div>
             <StatusBadge :status="unit.status || 'empty'" />
@@ -81,12 +81,6 @@ const props = defineProps({
 defineEmits(['unit-click', 'add-unit-to-floor', 'delete-floor'])
 
 const expanded = reactive(new Set())
-
-const unitTypeLabels = {
-  apartment: 'شقة', shop: 'محل', office: 'مكتب', warehouse: 'مستودع',
-  room: 'غرفة', garage: 'كراج', independent: 'عقار مستقل', other: 'أخرى',
-}
-function unitTypeLabel(type) { return unitTypeLabels[type] || type || '' }
 
 const unitsByFloor = computed(() => {
   const map = {}

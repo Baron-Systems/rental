@@ -191,8 +191,6 @@ export function calculateContractEndDate(startDate, paymentFrequency, cycles) {
 
 export function getFrequencyMonths(frequency) {
   const map = {
-    once: 0,
-    one_time: 0,
     weekly: 0,
     monthly: 1,
     bi_monthly: 2,
@@ -208,8 +206,6 @@ export function getFrequencyMonths(frequency) {
 export function getFrequencyInterval(frequency) {
   switch (frequency) {
     case 'weekly': return { months: 0, days: 7 }
-    case 'once':
-    case 'one_time': return { months: 0, days: 0 }
     case 'monthly': return { months: 1, days: 0 }
     case 'bi_monthly':
     case 'bimonthly': return { months: 2, days: 0 }
@@ -232,22 +228,6 @@ export function buildPeriodicSchedule(options) {
   const interval = getFrequencyInterval(frequency)
   const isEndTiming = commitmentTiming === 'end'
   const schedule = []
-
-  // Single payment (once / one_time)
-  if (interval.months === 0 && interval.days === 0) {
-    if (start <= end) {
-      const dueDate = isEndTiming ? end : start
-      schedule.push({
-        index: 0,
-        dueDate,
-        periodStart: new Date(start),
-        periodEnd: new Date(end),
-        amount,
-        periodLabel: 'دفعة واحدة',
-      })
-    }
-    return schedule
-  }
 
   // Day-based frequency (weekly)
   if (interval.days > 0) {
@@ -371,15 +351,6 @@ export function analyzeFixedPeriodicCharge(charge, endDate) {
     ? parseFloat(String(charge.last_period_adjustment_amount).replace(/,/g, ''))
     : NaN
   const isEndTiming = charge.commitment_timing === 'end'
-
-  // Single-period services (once) — single due at end of contract
-  if (interval.months === 0 && interval.days === 0) {
-    const dueDate = isEndTiming ? end : start
-    return {
-      dues: [{ dueDate: dateToISO(dueDate), amount, periodStart: dateToISO(start), periodEnd: dateToISO(end) }],
-      partialPeriod: { exists: false, startDate: null, endDate: null, handling, amount: 0 },
-    }
-  }
 
   const anchorDay = start.getUTCDate()
   const fullCycles = []

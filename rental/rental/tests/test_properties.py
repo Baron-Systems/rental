@@ -23,6 +23,10 @@ class TestProperties(FrappeTestCase):
 	def tearDownClass(cls):
 		frappe.set_user("Administrator")
 
+		# Clean up any test contracts via direct DB delete (bypass on_trash)
+		frappe.db.sql("DELETE FROM `tabLease Contract` WHERE name LIKE 'TEST-CONTRACT-%'")
+		frappe.db.commit()
+
 		for name in cls._created_units:
 			if frappe.db.exists("Rental Unit", name):
 				frappe.delete_doc("Rental Unit", name, force=True)
@@ -109,6 +113,9 @@ class TestProperties(FrappeTestCase):
 	def _create_unit(self, user, building, unit_number="U-1", floor=None, **kwargs):
 		frappe.set_user("Administrator")
 		account = frappe.db.get_value("Rental Building", building, "rental_account")
+		# Default unit_type to "apartment" if not provided (unit_type is mandatory)
+		if "unit_type" not in kwargs:
+			kwargs["unit_type"] = frappe.db.get_value("Unit Type", {"code": "apartment", "is_system": 1}, "name")
 		unit = frappe.get_doc({
 			"doctype": "Rental Unit",
 			"rental_account": account,
@@ -160,7 +167,9 @@ class TestProperties(FrappeTestCase):
 
 	def test_unit_crud(self):
 		building = self._create_building(self.owner_a, self.account_a, "Unit Test Building")
-		unit = self._create_unit(self.owner_a, building, "U-101", unit_type="apartment", area=80.0)
+		apartment_type = frappe.db.get_value("Unit Type", {"code": "apartment", "is_system": 1}, "name")
+		office_type = frappe.db.get_value("Unit Type", {"code": "office", "is_system": 1}, "name")
+		unit = self._create_unit(self.owner_a, building, "U-101", unit_type=apartment_type, area=80.0)
 
 		frappe.set_user(self.owner_a)
 		unit_doc = frappe.get_doc("Rental Unit", unit)
@@ -168,9 +177,9 @@ class TestProperties(FrappeTestCase):
 		self.assertEqual(unit_doc.rental_account, self.account_a)
 		self.assertEqual(unit_doc.status, "empty")
 
-		unit_doc.unit_type = "Office"
+		unit_doc.unit_type = office_type
 		unit_doc.save(ignore_permissions=True)
-		self.assertEqual(frappe.db.get_value("Rental Unit", unit, "unit_type"), "Office")
+		self.assertEqual(frappe.db.get_value("Rental Unit", unit, "unit_type"), office_type)
 
 		frappe.delete_doc("Rental Unit", unit, ignore_permissions=True)
 		self.assertFalse(frappe.db.exists("Rental Unit", unit))
@@ -409,4 +418,221 @@ class TestProperties(FrappeTestCase):
 
 		status = frappe.db.get_value("Rental Unit", unit, "status")
 		self.assertEqual(status, "empty")
+
+	# ==================================================================
+	# Unit deletion with Unit Attribute Values (owned/dependent data)
+	# ==================================================================
+
+	def _create_attr_value(self, unit, attr_code, **value_fields):
+		"""Create a Unit Attribute Value for the given unit."""
+		frappe.set_user("Administrator")
+		attr = frappe.db.get_value(
+			"Unit Attribute", {"code": attr_code, "is_system": 1}, "name"
+		)
+		if not attr:
+			self.skipTest(f"System attribute '{attr_code}' not seeded")
+		val = frappe.get_doc({
+			"doctype": "Unit Attribute Value",
+			"rental_account": frappe.db.get_value("Rental Unit", unit, "rental_account"),
+			"unit": unit,
+			"attribute": attr,
+			**value_fields,
+		})
+		val.insert(ignore_permissions=True)
+		return val.name
+
+	def _create_custom_attr_value(self, unit, account):
+		"""Create a custom attribute and a value for it on the unit."""
+		frappe.set_user("Administrator")
+		attr = frappe.get_doc({
+			"doctype": "Unit Attribute",
+			"attribute_name": f"DelTest {frappe.utils.random_string(4)}",
+			"code": f"deltest_{frappe.utils.random_string(4).lower()}",
+			"data_type": "Text",
+			"rental_account": account,
+		})
+		attr.insert(ignore_permissions=True)
+		val = frappe.get_doc({
+			"doctype": "Unit Attribute Value",
+			"rental_account": account,
+			"unit": unit,
+			"attribute": attr.name,
+			"value_text": "test value",
+		})
+		val.insert(ignore_permissions=True)
+		# Clean up the attribute itself after test
+		self.addCleanup(
+			lambda: frappe.delete_doc("Unit Attribute", attr.name, force=True)
+			if frappe.db.exists("Unit Attribute", attr.name) else None
+		)
+		return val.name
+
+	def test_delete_unit_with_attribute_values_succeeds(self):
+		"""Test 1: Unused unit with Unit Attribute Values can be deleted."""
+		from rental.rental.api.property import delete_unit
+		building = self._create_building(self.owner_a, self.account_a, "Del Attr Bldg 1")
+		unit = self._create_unit(self.owner_a, building, "U-DA1")
+		val1 = self._create_attr_value(unit, "rooms_count", value_integer=3)
+		val2 = self._create_attr_value(unit, "furnished", value_check=1)
+
+		# Verify values exist
+		self.assertTrue(frappe.db.exists("Unit Attribute Value", val1))
+		self.assertTrue(frappe.db.exists("Unit Attribute Value", val2))
+
+		# Delete the unit
+		frappe.set_user(self.owner_a)
+		result = delete_unit(unit)
+		self.assertTrue(result.get("success"))
+
+		# Test 2: Both unit and attribute values are gone
+		self.assertFalse(frappe.db.exists("Rental Unit", unit))
+		self.assertFalse(frappe.db.exists("Unit Attribute Value", val1))
+		self.assertFalse(frappe.db.exists("Unit Attribute Value", val2))
+		if unit in self._created_units:
+			self._created_units.remove(unit)
+
+	def test_delete_unit_with_rooms_and_bathrooms(self):
+		"""Test 3: Unit with rooms_count + bathrooms_count can be deleted."""
+		from rental.rental.api.property import delete_unit
+		building = self._create_building(self.owner_a, self.account_a, "Del Attr Bldg 2")
+		unit = self._create_unit(self.owner_a, building, "U-DA2")
+		val1 = self._create_attr_value(unit, "rooms_count", value_integer=2)
+		val2 = self._create_attr_value(unit, "bathrooms_count", value_integer=1)
+
+		frappe.set_user(self.owner_a)
+		delete_unit(unit)
+
+		self.assertFalse(frappe.db.exists("Rental Unit", unit))
+		self.assertFalse(frappe.db.exists("Unit Attribute Value", val1))
+		self.assertFalse(frappe.db.exists("Unit Attribute Value", val2))
+		if unit in self._created_units:
+			self._created_units.remove(unit)
+
+	def test_delete_unit_with_meter_capabilities(self):
+		"""Test 4: Unit with electricity_meter + water_meter can be deleted."""
+		from rental.rental.api.property import delete_unit
+		building = self._create_building(self.owner_a, self.account_a, "Del Attr Bldg 3")
+		unit = self._create_unit(self.owner_a, building, "U-DA3")
+		val1 = self._create_attr_value(unit, "electricity_meter", value_check=1)
+		val2 = self._create_attr_value(unit, "water_meter", value_check=1)
+
+		frappe.set_user(self.owner_a)
+		delete_unit(unit)
+
+		self.assertFalse(frappe.db.exists("Rental Unit", unit))
+		self.assertFalse(frappe.db.exists("Unit Attribute Value", val1))
+		self.assertFalse(frappe.db.exists("Unit Attribute Value", val2))
+		if unit in self._created_units:
+			self._created_units.remove(unit)
+
+	def test_delete_unit_with_custom_attribute_values(self):
+		"""Test 5: Unit with custom attribute values can be deleted."""
+		from rental.rental.api.property import delete_unit
+		building = self._create_building(self.owner_a, self.account_a, "Del Attr Bldg 4")
+		unit = self._create_unit(self.owner_a, building, "U-DA4")
+		val = self._create_custom_attr_value(unit, self.account_a)
+
+		frappe.set_user(self.owner_a)
+		delete_unit(unit)
+
+		self.assertFalse(frappe.db.exists("Rental Unit", unit))
+		self.assertFalse(frappe.db.exists("Unit Attribute Value", val))
+		if unit in self._created_units:
+			self._created_units.remove(unit)
+
+	def test_delete_unit_blocked_by_contract(self):
+		"""Test 6: Unit linked to a Lease Contract cannot be deleted."""
+		from rental.rental.api.property import delete_unit
+		building = self._create_building(self.owner_a, self.account_a, "Del Attr Bldg 5")
+		unit = self._create_unit(self.owner_a, building, "U-DA5")
+		val = self._create_attr_value(unit, "rooms_count", value_integer=3)
+
+		# Create a minimal lease contract
+		frappe.set_user("Administrator")
+		tenant = self._create_tenant()
+		contract = self._create_lease_contract(unit, tenant)
+
+		# Attempt to delete — should be blocked
+		frappe.set_user(self.owner_a)
+		with self.assertRaises((frappe.PermissionError, frappe.ValidationError)):
+			delete_unit(unit)
+
+		# Test 7: Unit and attribute values still exist
+		self.assertTrue(frappe.db.exists("Rental Unit", unit))
+		self.assertTrue(frappe.db.exists("Unit Attribute Value", val))
+
+		# Cleanup contract (direct DB delete to bypass on_trash hooks)
+		frappe.set_user("Administrator")
+		frappe.db.sql("DELETE FROM `tabLease Contract` WHERE name = %s", contract)
+		frappe.db.commit()
+		if tenant and frappe.db.exists("Rental Tenant", tenant):
+			frappe.delete_doc("Rental Tenant", tenant, force=True)
+
+	def test_delete_unit_transactional_no_partial_delete(self):
+		"""Test 8: If unit deletion fails, attribute values are NOT deleted (no partial delete)."""
+		building = self._create_building(self.owner_a, self.account_a, "Del Attr Bldg 6")
+		unit = self._create_unit(self.owner_a, building, "U-DA6")
+		val = self._create_attr_value(unit, "rooms_count", value_integer=3)
+
+		# Create a contract to block deletion
+		frappe.set_user("Administrator")
+		tenant = self._create_tenant()
+		contract = self._create_lease_contract(unit, tenant)
+
+		# Attempt to delete directly via frappe.delete_doc
+		# on_trash should throw before deleting attribute values
+		frappe.set_user("Administrator")
+		with self.assertRaises((frappe.PermissionError, frappe.ValidationError)):
+			frappe.delete_doc("Rental Unit", unit, ignore_permissions=True)
+
+		# Attribute value should still exist (no partial delete)
+		self.assertTrue(frappe.db.exists("Rental Unit", unit))
+		self.assertTrue(frappe.db.exists("Unit Attribute Value", val))
+
+		# Cleanup (direct DB delete to bypass on_trash hooks)
+		frappe.db.sql("DELETE FROM `tabLease Contract` WHERE name = %s", contract)
+		frappe.db.commit()
+		if tenant and frappe.db.exists("Rental Tenant", tenant):
+			frappe.delete_doc("Rental Tenant", tenant, force=True)
+
+	def _create_tenant(self):
+		"""Create a minimal tenant for contract tests."""
+		import frappe.utils
+		email = f"deltest_tenant_{frappe.utils.random_string(4).lower()}@test.com"
+		if frappe.db.exists("Rental Tenant", {"email": email}):
+			frappe.delete_doc("Rental Tenant", frappe.db.get_value("Rental Tenant", {"email": email}, "name"), force=True)
+		tenant = frappe.get_doc({
+			"doctype": "Rental Tenant",
+			"rental_account": self.account_a,
+			"full_name": f"DelTest Tenant {frappe.utils.random_string(4)}",
+			"email": email,
+			"phone": "0500000000",
+			"is_active": 1,
+		})
+		tenant.insert(ignore_permissions=True)
+		return tenant.name
+
+	def _create_lease_contract(self, unit, tenant):
+		"""Create a minimal lease contract linking unit and tenant.
+
+		Uses direct DB insert to bypass the full contract validation
+		(rental settings, contract number generation, etc.) — we only
+		need the link to exist for the delete-blocking test.
+		"""
+		import frappe.utils
+		account = frappe.db.get_value("Rental Unit", unit, "rental_account")
+		building = frappe.db.get_value("Rental Unit", unit, "building")
+		name = f"TEST-CONTRACT-{frappe.utils.random_string(8).upper()}"
+		frappe.db.sql("""
+			INSERT INTO `tabLease Contract`
+			(name, creation, modified, modified_by, owner, docstatus,
+			 rental_account, unit, building, tenant,
+			 start_date, end_date, rent_amount, payment_frequency, status)
+			VALUES (%s, NOW(), NOW(), 'Administrator', 'Administrator', 0,
+			 %s, %s, %s, %s,
+			 %s, %s, 1000, 'monthly', 'active')
+		""", (name, account, unit, building, tenant,
+			  frappe.utils.add_days(frappe.utils.today(), -30),
+			  frappe.utils.add_days(frappe.utils.today(), 365)))
+		return name
 

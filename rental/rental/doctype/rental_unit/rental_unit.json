@@ -69,10 +69,9 @@
   },
   {
    "fieldname": "unit_type",
-   "fieldtype": "Select",
+   "fieldtype": "Link",
    "label": "Unit Type",
-   "length": 30,
-   "options": "\napartment\nshop\noffice\nwarehouse\nroom\ngarage\nindependent\nother",
+   "options": "Unit Type",
    "reqd": 1
   },
   {

@@ -188,6 +188,8 @@ def validate_contract_charges(
 	account: str,
 	contract_start_date=None,
 	contract_end_date=None,
+	contract_unit=None,
+	allow_incomplete_due_types: set[str] | None = None,
 ) -> list[dict]:
 	"""Validate a list of charge input dicts.
 
@@ -205,6 +207,12 @@ def validate_contract_charges(
 	- fixed_periodic: amount, frequency, commitmentTiming required; firstDueDate
 	  forced to contract.startDate; ≥2 cycles within contract period.
 	- metered: openingMeterReading required.
+	- metered: unit must have the corresponding meter capability
+	  (electricity_meter or water_meter).
+- allow_incomplete_due_types: set of due_type names permitted to have no
+	  calculation_method (used by renewal when meter capability was cleared).
+	  Only these specific due types skip the "calculation_method required" check;
+	  all other validation still applies to all charges.
 	"""
 	if not isinstance(charge_inputs, list):
 		frappe.throw(frappe._("بيانات الالتزامات غير صالحة"))
@@ -290,49 +298,71 @@ def validate_contract_charges(
 			else:
 				# paymentBy === landlord: calculation method required
 				if not input_calc_method:
-					frappe.throw(frappe._("طريقة الاحتساب مطلوبة لخدمة {0}").format(dt_display))
-
-				if not is_allowed_calculation_method_for_due_type(dt.due_type_code, input_calc_method):
-					frappe.throw(
-						frappe._("طريقة الاحتساب {0} غير مسموح بها لخدمة {1}").format(
-							CALCULATION_METHOD_LABELS.get(input_calc_method, input_calc_method), dt_display
-						)
-					)
-				calculation_method = input_calc_method
-
-				if calculation_method == CALCULATION_METHODS["fixed_periodic"]:
-					if amount is None or amount <= 0:
-						frappe.throw(frappe._("المبلغ مطلوب وأكبر من صفر لخدمة {0}").format(dt_display))
-					if not frequency or frequency not in FIXED_PERIODIC_FREQUENCIES:
-						frappe.throw(frappe._("الدورية مطلوبة أو غير صالحة لخدمة {0}").format(dt_display))
-					if not commitment_timing:
-						frappe.throw(frappe._("توقيت الاستحقاق مطلوب لخدمة {0}").format(dt_display))
-
-					start_day = to_calendar_day(contract_start_date) if contract_start_date else None
-					end_day = to_calendar_day(contract_end_date) if contract_end_date else None
-
-					if start_day and end_day:
-						schedule = build_fixed_periodic_schedule(
-							{
-								"amount": amount,
-								"frequency": frequency,
-								"first_due_date": start_day,
-								"commitment_timing": commitment_timing,
-								"last_period_handling": last_period_handling,
-								"last_period_adjustment_amount": last_period_adjustment_amount,
-							},
-							end_day,
-						)
-						if len(schedule) < 2:
-							frappe.throw(
-								frappe._("الدورية المختارة لخدمة {0} لا تنتج دورتين كاملتين ضمن مدة العقد").format(dt_display)
+					# Narrow exception: allow incomplete charges whose meter capability
+					# was cleared during renewal. Only the specific due types in
+					# allow_incomplete_due_types are permitted to have no calculation_method.
+					# All other charges must specify a valid calculation method.
+					if allow_incomplete_due_types and due_type_name in allow_incomplete_due_types:
+						pass  # calculation_method stays None, user must choose before approval
+					else:
+						frappe.throw(frappe._("طريقة الاحتساب مطلوبة لخدمة {0}").format(dt_display))
+				else:
+					if not is_allowed_calculation_method_for_due_type(dt.due_type_code, input_calc_method):
+						frappe.throw(
+							frappe._("طريقة الاحتساب {0} غير مسموح بها لخدمة {1}").format(
+								CALCULATION_METHOD_LABELS.get(input_calc_method, input_calc_method), dt_display
 							)
+						)
+					calculation_method = input_calc_method
 
-					first_due_date = start_day
+					if calculation_method == CALCULATION_METHODS["fixed_periodic"]:
+						if amount is None or amount <= 0:
+							frappe.throw(frappe._("المبلغ مطلوب وأكبر من صفر لخدمة {0}").format(dt_display))
+						if not frequency or frequency not in FIXED_PERIODIC_FREQUENCIES:
+							frappe.throw(frappe._("الدورية مطلوبة أو غير صالحة لخدمة {0}").format(dt_display))
+						if not commitment_timing:
+							frappe.throw(frappe._("توقيت الاستحقاق مطلوب لخدمة {0}").format(dt_display))
 
-				if calculation_method == CALCULATION_METHODS["metered"]:
-					if not opening_meter_reading:
-						frappe.throw(frappe._("قراءة بداية العداد مطلوبة لخدمة {0}").format(dt_display))
+						start_day = to_calendar_day(contract_start_date) if contract_start_date else None
+						end_day = to_calendar_day(contract_end_date) if contract_end_date else None
+
+						if start_day and end_day:
+							schedule = build_fixed_periodic_schedule(
+								{
+									"amount": amount,
+									"frequency": frequency,
+									"first_due_date": start_day,
+									"commitment_timing": commitment_timing,
+									"last_period_handling": last_period_handling,
+									"last_period_adjustment_amount": last_period_adjustment_amount,
+								},
+								end_day,
+							)
+							if len(schedule) < 2:
+								frappe.throw(
+									frappe._("الدورية المختارة لخدمة {0} لا تنتج دورتين كاملتين ضمن مدة العقد").format(dt_display)
+								)
+
+						first_due_date = start_day
+
+					if calculation_method == CALCULATION_METHODS["metered"]:
+						if not opening_meter_reading:
+							frappe.throw(frappe._("قراءة بداية العداد مطلوبة لخدمة {0}").format(dt_display))
+
+						# Capability check: unit must have the corresponding meter capability
+						if contract_unit and is_metered_due_type_code(dt.due_type_code):
+							from rental.rental.services.unit_capability_service import can_use_metered_for_due_type
+							if not can_use_metered_for_due_type(contract_unit, dt.due_type_code):
+								if dt.due_type_code == "electricity":
+									frappe.throw(
+										frappe._("لا يمكن استخدام الاحتساب حسب قراءة العداد للكهرباء لأن الوحدة لا تحتوي على عداد كهرباء."),
+										frappe.ValidationError,
+									)
+								elif dt.due_type_code == "water":
+									frappe.throw(
+										frappe._("لا يمكن استخدام الاحتساب حسب قراءة العداد للمياه لأن الوحدة لا تحتوي على عداد مياه."),
+										frappe.ValidationError,
+									)
 
 		# Build normalised validated object (source: contract-charge.service.ts:382-394)
 		is_fixed = calculation_method == CALCULATION_METHODS["fixed_periodic"]
@@ -359,16 +389,27 @@ def validate_contract_charges(
 # ---------------------------------------------------------------------------
 
 
-def save_contract_charges(contract_doc, charge_inputs: list[dict], account: str) -> None:
+def save_contract_charges(
+	contract_doc,
+	charge_inputs: list[dict],
+	account: str,
+	allow_incomplete_due_types: set[str] | None = None,
+) -> None:
 	"""Validate and persist contract charges on *contract_doc*.
 
 	Replaces existing charges with the new validated set.
+
+	``allow_incomplete_due_types`` is a set of due_type names that are permitted
+	to have no calculation_method (used by renewal when a meter capability was
+	cleared). All other charges are fully validated.
 	"""
 	validated = validate_contract_charges(
 		charge_inputs,
 		account,
 		contract_start_date=contract_doc.start_date,
 		contract_end_date=contract_doc.end_date,
+		contract_unit=contract_doc.unit,
+		allow_incomplete_due_types=allow_incomplete_due_types,
 	)
 
 	# Clear existing charges
@@ -761,28 +802,101 @@ def copy_contract_charges_for_renewal(old_contract_doc, new_contract_doc, accoun
 	Source: ``copyContractChargesForRenewal`` (contract-charge.service.ts:777-795).
 	- amount = charge.amount only when responsibility == 'tenant', else None.
 	- first_due_date = new contract start only when calculation_method == 'fixed_periodic', else None.
-	- opening_meter_reading = None (reset for renewal).
+	- opening_meter_reading: for metered charges, captured from the unit's current
+	  meter reading so that validation (which requires a non-null opening reading)
+	  passes at insert time. A zero reading ("0", "0.0") is valid and preserved.
+	  If the unit's current reading is genuinely missing (None/empty), throws a
+	  clear Arabic error.
+	- Capability-aware: if a metered charge's due type requires a meter capability
+	  that the unit no longer has, the charge is KEPT but calculation_method is
+	  cleared to None. The user must explicitly choose another allowed method.
+	  opening_meter_reading is not used in this case.
 	"""
 	new_contract_doc.set("contract_charges", [])
+
+	# Fetch unit readings once for all metered charges
+	unit_readings = {}
+	if new_contract_doc.unit:
+		unit = frappe.db.get_value(
+			"Rental Unit", new_contract_doc.unit,
+			["current_electricity_meter_reading", "current_water_meter_reading"],
+			as_dict=True,
+		)
+		if unit:
+			unit_readings = {
+				"electricity": unit.current_electricity_meter_reading,
+				"water": unit.current_water_meter_reading,
+			}
+
+	from rental.rental.services.unit_capability_service import can_use_metered_for_due_type
+
+	cleared_due_types: set[str] = set()
 
 	for charge in old_contract_doc.contract_charges:
 		is_tenant = charge.responsibility == "tenant"
 		is_fixed_periodic = charge.calculation_method == "fixed_periodic"
+		is_metered = charge.calculation_method == "metered"
+
+		# Determine the effective calculation method and opening reading
+		effective_calc_method = charge.calculation_method
+		opening_meter_reading = None
+
+		if is_metered:
+			dt_code = frappe.db.get_value("Rental Due Type", charge.due_type, "due_type_code")
+
+			# Check if the unit still has the required meter capability
+			if dt_code and not can_use_metered_for_due_type(new_contract_doc.unit, dt_code):
+				# Capability is absent — keep the charge but clear calculation_method
+				# Do NOT auto-select a replacement method; user must choose explicitly
+				effective_calc_method = None
+				cleared_due_types.add(charge.due_type)
+				# opening_meter_reading stays None — not used after metered is cleared
+			else:
+				# Capability exists — capture opening reading from unit's current reading
+				current_reading = unit_readings.get(dt_code) if dt_code else None
+
+				if current_reading is None or current_reading == "":
+					# Genuinely missing — do not invent a reading, do not use zero
+					dt_display = frappe.db.get_value(
+						"Rental Due Type", charge.due_type, "due_type_name"
+					) or charge.due_type
+					frappe.throw(
+						frappe._(
+							"لا يمكن تجديد العقد: قراءة العداد الحالية للوحدة غير متوفرة لخدمة {0}. "
+							"يرجى تسجيل القراءة الحالية للوحدة أولاً."
+						).format(dt_display),
+						frappe.ValidationError,
+					)
+				# Preserve the reading as-is (including "0", "0.0")
+				opening_meter_reading = current_reading
+
+		# When calculation_method is cleared, also clear metered-specific fields
+		effective_is_fixed = effective_calc_method == "fixed_periodic"
+
 		new_contract_doc.append("contract_charges", {
 			"due_type": charge.due_type,
 			"responsibility": charge.responsibility,
-			"calculation_method": charge.calculation_method,
+			"calculation_method": effective_calc_method,
 			"payment_by": charge.payment_by,
 			# A16: amount only for tenant charges (legacy line 785).
 			"amount": charge.amount if is_tenant else None,
-			"frequency": charge.frequency if is_fixed_periodic else None,
+			"frequency": charge.frequency if effective_is_fixed else None,
 			# A16: first_due_date only for fixed_periodic (legacy line 787-788).
-			"first_due_date": new_contract_doc.start_date if is_fixed_periodic else None,
+			"first_due_date": new_contract_doc.start_date if effective_is_fixed else None,
 			"commitment_timing": charge.commitment_timing,
 			"last_period_handling": charge.last_period_handling,
 			"last_period_adjustment_amount": charge.last_period_adjustment_amount,
-			"opening_meter_reading": None,  # Reset for renewal
+			"opening_meter_reading": opening_meter_reading,
 		})
+
+	# If any charge had its calculation_method cleared due to missing capability,
+	# record the set of cleared due_type names so LeaseContract.validate can pass
+	# them to validate_contract_charges as allow_incomplete_due_types.
+	# This narrowly scopes the exception: only these specific due types are
+	# allowed to have no calculation_method. All other charges are validated
+	# normally. Approval re-validation will still reject incomplete charges.
+	if cleared_due_types:
+		new_contract_doc.flags.incomplete_metered_due_types = cleared_due_types
 
 
 # ---------------------------------------------------------------------------
@@ -837,7 +951,6 @@ def build_service_clause_text(charge) -> str | None:
 def _get_frequency_label(frequency: str) -> str:
 	"""Source: getFrequencyLabel (contract-charge.service.ts:857-873)."""
 	labels = {
-		"once": "مرة واحدة",
 		"monthly": "شهريًا",
 		"bi_monthly": "كل شهرين",
 		"quarterly": "ربع سنويًا",

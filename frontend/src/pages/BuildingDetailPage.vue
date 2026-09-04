@@ -439,12 +439,6 @@ function unitStatusDot(unit) {
   return map[unit.status] || 'bg-gray-400'
 }
 
-const unitTypeLabels = {
-  apartment: 'شقة', shop: 'محل', office: 'مكتب', warehouse: 'مستودع',
-  room: 'غرفة', garage: 'كراج', independent: 'عقار مستقل', other: 'أخرى',
-}
-function unitTypeLabel(type) { return unitTypeLabels[type] || type || '' }
-
 function formatDate(dateStr) {
   if (!dateStr) return '—'
   const d = new Date(dateStr)

@@ -43,8 +43,8 @@
             </p>
             <p v-if="selectedUnit" class="text-xs text-navy-500">
               {{ selectedUnit.floor?.name || selectedUnit.floor_name }}
-              <template v-if="selectedUnit.unit_type || selectedUnit.unitType">
-                ({{ unitTypeLabel(selectedUnit.unit_type || selectedUnit.unitType) }})
+              <template v-if="selectedUnit.unit_type_name || selectedUnit.unit_type || selectedUnit.unitType">
+                ({{ selectedUnit.unit_type_name || '' }})
               </template>
             </p>
           </div>
@@ -197,17 +197,6 @@ const PAYMENT_FREQUENCIES = [
   { value: 'annual', label: 'سنوي' },
 ]
 
-const UNIT_TYPE_LABELS = {
-  apartment: 'شقة',
-  office: 'مكتب',
-  shop: 'محل',
-  warehouse: 'مستودع',
-  villa: 'فيلا',
-  studio: 'استوديو',
-  room: 'غرفة',
-  building: 'مبنى',
-}
-
 const FIXED_PERIODIC_FREQUENCY_LABELS = {
   weekly: 'أسبوعي',
   monthly: 'شهريًا',
@@ -218,10 +207,6 @@ const FIXED_PERIODIC_FREQUENCY_LABELS = {
 }
 
 const CURRENCY_LABELS = { ILS: 'شيكل', JOD: 'دينار أردني', USD: 'دولار' }
-
-function unitTypeLabel(type) {
-  return UNIT_TYPE_LABELS[type] || type || ''
-}
 
 function paymentFrequencyLabel(freq) {
   const f = PAYMENT_FREQUENCIES.find((x) => x.value === freq)

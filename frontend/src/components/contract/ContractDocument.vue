@@ -192,13 +192,9 @@
         <strong>{{ selectedUnit.unitNumber || selectedUnit.unit_number }}</strong>
         الواقعة في عقار <strong>{{ selectedBuilding?.building_name || selectedBuilding?.name }}</strong>،
         في <strong>{{ selectedUnitFloorName || '—' }}</strong>،
-        من نوع <strong>{{ unitTypeLabel(selectedUnit.unitType || selectedUnit.unit_type) }}</strong><template
+        من نوع <strong>{{ selectedUnit.unit_type_name || selectedUnit.unitType || '' }}</strong><template
           v-if="selectedUnit.area || selectedUnit.unit_area"
-        >، ومساحتها <strong>{{ selectedUnit.area || selectedUnit.unit_area }}</strong> م²</template><template
-          v-if="selectedUnit.currentElectricityMeterReading || selectedUnit.current_electricity_meter_reading"
-        >، وعليها قراءة عداد كهرباء <strong>{{ selectedUnit.currentElectricityMeterReading || selectedUnit.current_electricity_meter_reading }}</strong></template><template
-          v-if="selectedUnit.currentWaterMeterReading || selectedUnit.current_water_meter_reading"
-        >، وقراءة عداد مياه <strong>{{ selectedUnit.currentWaterMeterReading || selectedUnit.current_water_meter_reading }}</strong></template>.
+        >، ومساحتها <strong>{{ selectedUnit.area || selectedUnit.unit_area }}</strong> م²</template>.
       </p>
       <p v-else class="text-navy-400">
         {{ isPreview ? 'لم يُحدد الوحدة' : 'اختر العقار، ثم الطابق، ثم الوحدة' }}
@@ -485,19 +481,12 @@ onMounted(() => {
 
 // ---- Constants ----
 const PAYMENT_FREQUENCIES = [
-  { value: 'once', label: 'مرة واحدة' },
   { value: 'monthly', label: 'شهري' },
   { value: 'bi_monthly', label: 'كل شهرين' },
   { value: 'quarterly', label: 'ربع سنوي' },
   { value: 'semi_annual', label: 'نصف سنوي' },
   { value: 'annual', label: 'سنوي' },
 ]
-
-// Source: ContractDocument.tsx:13-16 — exact match, no extra types
-const UNIT_TYPE_LABELS = {
-  apartment: 'شقة', shop: 'محل', office: 'مكتب', warehouse: 'مستودع',
-  room: 'غرفة', garage: 'كراج', independent: 'عقار مستقل', other: 'أخرى',
-}
 
 // Source: settings.ts:125-131 getCurrencyLabel — exact match, no extra currencies
 const CURRENCY_LABELS = { ILS: 'شيكل', JOD: 'دينار أردني', USD: 'دولار' }
@@ -515,10 +504,6 @@ const currencyLabel = computed(() => {
 })
 
 // ---- Helpers ----
-function unitTypeLabel(type) {
-  return UNIT_TYPE_LABELS[type] || type || '—'
-}
-
 function getCurrencyLabel(currency) {
   return CURRENCY_LABELS[currency] || currency || ''
 }
@@ -526,7 +511,7 @@ function getCurrencyLabel(currency) {
 // Source: utils.ts:244-258 getFrequencyInterval — includes all aliases
 function getFrequencyMonths(freq) {
   const map = {
-    weekly: 0, once: 0, one_time: 0,
+    weekly: 0,
     monthly: 1, bi_monthly: 2, bimonthly: 2,
     quarterly: 3, semi_annual: 6, semiannual: 6, annual: 12,
   }
@@ -559,7 +544,6 @@ const frequencyAdjective = computed(() =>
 
 function getFrequencyPaymentText(freq) {
   const months = getFrequencyMonths(freq)
-  if (months === 0) return 'دفعة واحدة'
   if (months === 1) return 'شهرياً'
   if (months === 2) return 'كل شهرين'
   if (months === 3) return 'كل ثلاثة أشهر'
@@ -700,7 +684,7 @@ const unitOptions = computed(() => {
   return available.map((u) => ({
     label: `${u.unitNumber || u.unit_number} — ${unitStatusLabels[u.status] || u.status || ''}`,
     value: u.id || u.name,
-    meta: u.floor?.name || unitTypeLabel(u.unitType || u.unit_type) || '',
+    meta: u.floor?.name || u.unit_type_name || '',
   }))
 })
 

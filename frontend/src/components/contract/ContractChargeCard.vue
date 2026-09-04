@@ -48,18 +48,25 @@
 
       <!-- Calculation Method (only when tenant && paymentBy=landlord) -->
       <div
-        v-if="charge.responsibility === 'tenant' && charge.payment_by === PAYMENT_BY.landlord && calculationMethods.length > 0"
+        v-if="charge.responsibility === 'tenant' && charge.payment_by === PAYMENT_BY.landlord && (calculationMethods.length > 0 || isCurrentMethodInvalid)"
       >
         <label class="mb-1 block text-sm text-navy-700">طريقة الاحتساب</label>
         <select
           :value="charge.calculation_method || ''"
           class="select-v2 w-full rounded px-2 py-1 text-sm"
-          :class="!charge.calculation_method ? 'text-navy-400' : 'text-navy-900'"
+          :class="!charge.calculation_method ? 'text-navy-400' : (isCurrentMethodInvalid ? 'border-red-400 text-red-700' : 'text-navy-900')"
           @change="(e) => emit('update', { charge, updates: { calculation_method: e.target.value } })"
         >
           <option value="" disabled hidden>اختر طريقة الاحتساب</option>
           <option v-for="m in calculationMethods" :key="m.value" :value="m.value">{{ m.label }}</option>
+          <!-- Show invalid current method as a disabled, marked option -->
+          <option v-if="isCurrentMethodInvalid" :value="charge.calculation_method" disabled>
+            {{ currentMethodLabel }} — غير متاح (الوحدة لا تملك عداد)
+          </option>
         </select>
+        <p v-if="isCurrentMethodInvalid" class="mt-1 text-xs text-red-600">
+          طريقة الاحتساب الحالية «{{ currentMethodLabel }}» غير متاحة لهذه الوحدة. يرجى اختيار طريقة احتساب أخرى.
+        </p>
       </div>
 
       <!-- Fixed Periodic fields -->
@@ -177,15 +184,19 @@
         </div>
       </div>
 
-      <!-- Metered: opening reading -->
-      <input
+      <!-- Metered: opening reading (preserve zero correctly) -->
+      <div
         v-if="charge.responsibility === 'tenant' && charge.payment_by === PAYMENT_BY.landlord && charge.calculation_method === 'metered'"
-        type="text"
-        :value="charge.opening_meter_reading || ''"
-        placeholder="قراءة بداية العداد"
-        class="input-v2 w-full text-sm"
-        @input="(e) => emit('update', { charge, updates: { opening_meter_reading: e.target.value } })"
-      />
+      >
+        <label class="mb-1 block text-sm text-navy-700">قراءة بداية العداد</label>
+        <input
+          type="text"
+          :value="openingMeterReadingDisplay"
+          placeholder="قراءة بداية العداد"
+          class="input-v2 w-full text-sm"
+          @input="(e) => emit('update', { charge, updates: { opening_meter_reading: e.target.value } })"
+        />
+      </div>
 
       <!-- Per-charge errors -->
       <p v-if="errorFor('responsibility')" class="text-xs text-red-600">{{ errorFor('responsibility') }}</p>
@@ -231,6 +242,9 @@ const props = defineProps({
   contractEndDate: { type: String, default: '' },
   currency: { type: String, default: 'ILS' },
   dueTypes: { type: Array, default: () => [] },
+  // Meter capability flags from the selected unit (backend-provided)
+  electricityMeter: { type: Boolean, default: false },
+  waterMeter: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update', 'remove'])
 
@@ -261,7 +275,7 @@ const LAST_PERIOD_HANDLING_LABELS = {
   manual: 'تسوية يدوية',
 }
 const FREQUENCY_LABELS = {
-  weekly: 'أسبوعي', once: 'مرة واحدة', monthly: 'شهريًا',
+  weekly: 'أسبوعي', monthly: 'شهريًا',
   bi_monthly: 'كل شهرين', quarterly: 'ربع سنويًا',
   semi_annual: 'نصف سنويًا', annual: 'سنويًا',
 }
@@ -278,11 +292,21 @@ function getMeterField(code) {
   return null
 }
 
-function getAvailableCalculationMethodsForDueType(code, paymentBy) {
+function getAvailableCalculationMethodsForDueType(code, paymentBy, electricityMeter, waterMeter) {
   if (paymentBy === PAYMENT_BY.tenant) return []
-  const methods = isMeteredDueTypeCode(code)
-    ? [CALCULATION_METHODS.metered, CALCULATION_METHODS.fixed_periodic, CALCULATION_METHODS.actual_bill]
-    : [CALCULATION_METHODS.fixed_periodic, CALCULATION_METHODS.actual_bill, CALCULATION_METHODS.on_demand]
+  let methods
+  if (isMeteredDueTypeCode(code)) {
+    methods = [CALCULATION_METHODS.metered, CALCULATION_METHODS.fixed_periodic, CALCULATION_METHODS.actual_bill]
+    // Filter out metered if the unit lacks the corresponding meter capability
+    if (code === 'electricity' && !electricityMeter) {
+      methods = methods.filter((m) => m !== CALCULATION_METHODS.metered)
+    }
+    if (code === 'water' && !waterMeter) {
+      methods = methods.filter((m) => m !== CALCULATION_METHODS.metered)
+    }
+  } else {
+    methods = [CALCULATION_METHODS.fixed_periodic, CALCULATION_METHODS.actual_bill, CALCULATION_METHODS.on_demand]
+  }
   return methods.map((m) => ({ value: m, label: CALCULATION_METHOD_LABELS[m] }))
 }
 
@@ -297,7 +321,35 @@ const chargeName = computed(() => {
 const calculationMethods = computed(() => {
   if (props.charge.responsibility !== 'tenant') return []
   if (props.charge.payment_by !== PAYMENT_BY.landlord) return []
-  return getAvailableCalculationMethodsForDueType(chargeCode.value, props.charge.payment_by)
+  return getAvailableCalculationMethodsForDueType(
+    chargeCode.value, props.charge.payment_by, props.electricityMeter, props.waterMeter
+  )
+})
+
+// ---- Invalid draft state ----
+// When the current calculation_method is metered but the unit no longer has
+// the corresponding meter capability, the method is invalid. We do NOT
+// silently replace it — we show it as invalid and require explicit correction.
+const isCurrentMethodInvalid = computed(() => {
+  if (!props.editable) return false
+  if (props.charge.responsibility !== 'tenant') return false
+  if (props.charge.payment_by !== PAYMENT_BY.landlord) return false
+  if (props.charge.calculation_method !== CALCULATION_METHODS.metered) return false
+  if (chargeCode.value === 'electricity' && !props.electricityMeter) return true
+  if (chargeCode.value === 'water' && !props.waterMeter) return true
+  return false
+})
+
+const currentMethodLabel = computed(() => {
+  return CALCULATION_METHOD_LABELS[props.charge.calculation_method] || props.charge.calculation_method || ''
+})
+
+// ---- Opening meter reading display (preserve zero) ----
+// Do NOT use truthiness — 0, 0.0, "0", "0.0" are all valid readings.
+const openingMeterReadingDisplay = computed(() => {
+  const val = props.charge.opening_meter_reading
+  if (val === null || val === undefined || val === '') return ''
+  return String(val)
 })
 
 // ---- Available frequencies ----
@@ -349,7 +401,6 @@ function formatCurrencyLocal(amount) {
 // Source: contract-charge.service.ts:857-874 getFrequencyLabel — dedicated function
 function getFrequencyLabel(frequency) {
   switch (frequency) {
-    case 'once': return 'مرة واحدة'
     case 'monthly': return 'شهريًا'
     case 'bi_monthly': return 'كل شهرين'
     case 'quarterly': return 'ربع سنويًا'

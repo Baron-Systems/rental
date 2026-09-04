@@ -10,6 +10,7 @@ import frappe
 from rental.rental.utils.date_utils import (
 	to_calendar_day,
 	get_contract_period_status,
+	PAYMENT_FREQUENCIES,
 )
 
 
@@ -69,6 +70,10 @@ def validate_contract_basic_data(contract_doc) -> None:
 	rent_error = validate_rent_amount(contract_doc.rent_amount)
 	if rent_error:
 		frappe.throw(frappe._(rent_error))
+
+	# 2b. Payment frequency must be one of the supported periodic frequencies
+	if contract_doc.payment_frequency and contract_doc.payment_frequency not in PAYMENT_FREQUENCIES:
+		frappe.throw(frappe._("دورية الإيجار غير مدعومة"))
 
 	# 3. Existence checks (source: contract-validation.ts:146-154)
 	account = contract_doc.rental_account
@@ -337,6 +342,64 @@ def validate_contract_for_approval(contract_doc) -> None:
 	overlap = check_contract_overlap(contract_doc.unit, contract_doc.start_date, contract_doc.end_date, exclude=contract_doc.name)
 	if overlap:
 		_raise_overlap_error(overlap)
+
+	# 6. Capability re-validation for metered charges
+	# Re-check that the unit still has the required meter capabilities
+	# for any metered charges on the contract. This catches cases where
+	# a capability was removed after the draft was created.
+	_validate_metered_capabilities_for_approval(contract_doc)
+
+
+def _validate_metered_capabilities_for_approval(contract_doc) -> None:
+	"""Re-validate that metered charges still have their unit capabilities.
+
+	Called during approval to catch capability changes that happened
+	between draft creation and approval.
+
+	Also catches incomplete charges (tenant + landlord + no calculation_method)
+	that may result from capability-aware renewal clearing the calculation method.
+	"""
+	if not contract_doc.unit or not contract_doc.contract_charges:
+		return
+
+	from rental.rental.services.unit_capability_service import can_use_metered_for_due_type
+
+	for charge in contract_doc.contract_charges:
+		# Check for incomplete charges (tenant + landlord + no calculation_method)
+		# This catches renewal charges where capability was cleared
+		if (charge.responsibility == "tenant"
+			and charge.payment_by == "landlord"
+			and not charge.calculation_method):
+			dt_display = frappe.db.get_value(
+				"Rental Due Type", charge.due_type, "due_type_name"
+			) or charge.due_type
+			frappe.throw(
+				frappe._("طريقة الاحتساب مطلوبة لخدمة {0}").format(dt_display),
+				frappe.ValidationError,
+			)
+
+		if charge.calculation_method != "metered":
+			continue
+		if charge.responsibility != "tenant":
+			continue
+		if charge.payment_by not in ("landlord", None):
+			continue
+
+		dt_code = frappe.db.get_value("Rental Due Type", charge.due_type, "due_type_code")
+		if not dt_code:
+			continue
+
+		if not can_use_metered_for_due_type(contract_doc.unit, dt_code):
+			if dt_code == "electricity":
+				frappe.throw(
+					frappe._("لا يمكن استخدام الاحتساب حسب قراءة العداد للكهرباء لأن الوحدة لا تحتوي على عداد كهرباء."),
+					frappe.ValidationError,
+				)
+			elif dt_code == "water":
+				frappe.throw(
+					frappe._("لا يمكن استخدام الاحتساب حسب قراءة العداد للمياه لأن الوحدة لا تحتوي على عداد مياه."),
+					frappe.ValidationError,
+				)
 
 
 # ---------------------------------------------------------------------------

@@ -52,9 +52,18 @@ class LeaseContract(Document):
 		if self.status == "draft":
 			validate_contract_draft_unit(self)
 
-		# Validate charges if present
+		# Validate charges if present.
+		# When copy_contract_charges_for_renewal clears a metered charge's
+		# calculation_method (because the unit no longer has the capability),
+		# it sets flags.incomplete_metered_due_types to the set of due_type names
+		# that are allowed to be incomplete. validate_contract_charges will still
+		# validate ALL charges normally — only the "calculation_method required"
+		# check is relaxed for these specific due types. All other charges
+		# (including unrelated invalid ones) receive full validation.
+		# Approval re-validation will still reject incomplete charges.
 		if self.contract_charges:
 			account = self.rental_account
+			allow_incomplete = getattr(self.flags, "incomplete_metered_due_types", None)
 			charge_inputs = []
 			for row in self.contract_charges:
 				if row.due_type:
@@ -72,7 +81,8 @@ class LeaseContract(Document):
 						"opening_meter_reading": row.opening_meter_reading,
 					})
 			if charge_inputs:
-				save_contract_charges(self, charge_inputs, account)
+				save_contract_charges(self, charge_inputs, account,
+					allow_incomplete_due_types=allow_incomplete)
 
 	# is_historical is set only during approval (in approve_contract), not on every validate.
 

@@ -164,7 +164,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Payment Frequency",
-   "options": "once\nmonthly\nbi_monthly\nquarterly\nsemi_annual\nannual",
+   "options": "monthly\nbi_monthly\nquarterly\nsemi_annual\nannual",
    "reqd": 1
   },
   {

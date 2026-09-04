@@ -18,7 +18,7 @@ import frappe
 # Frequency constants  (source: src/lib/constants.ts)
 # ---------------------------------------------------------------------------
 
-PAYMENT_FREQUENCIES = ["once", "monthly", "bi_monthly", "quarterly", "semi_annual", "annual"]
+PAYMENT_FREQUENCIES = ["monthly", "bi_monthly", "quarterly", "semi_annual", "annual"]
 
 FIXED_PERIODIC_FREQUENCIES = ["monthly", "bi_monthly", "quarterly", "semi_annual", "annual"]
 
@@ -32,7 +32,6 @@ FREQUENCY_MONTHS = {
 
 # Alias map for tolerant parsing (source: getFrequencyInterval aliases)
 _FREQUENCY_ALIASES = {
-	"one_time": "once",
 	"bimonthly": "bi_monthly",
 	"semiannual": "semi_annual",
 	"semi-annual": "semi_annual",
@@ -54,8 +53,6 @@ def get_frequency_months(frequency: str) -> int:
 	f = normalise_frequency(frequency)
 	if f == "weekly":
 		return 0  # weekly is day-based, not month-based
-	if f == "once":
-		return 0
 	return FREQUENCY_MONTHS.get(f, 1)
 
 
@@ -64,8 +61,6 @@ def get_frequency_days(frequency: str) -> int:
 	f = normalise_frequency(frequency)
 	if f == "weekly":
 		return 7
-	if f == "once":
-		return 0
 	return get_frequency_months(f) * 30  # rough approximation
 
 
@@ -168,9 +163,6 @@ def get_period_label(start, frequency: str, index: int) -> str:
 	f = normalise_frequency(frequency)
 	s = to_calendar_day(start)
 
-	if f == "once":
-		return "دفعة واحدة"
-
 	if f == "weekly":
 		end_day = add_days(s, 6)
 		return f"من {s.strftime('%Y-%m-%d')} إلى {end_day.strftime('%Y-%m-%d')}"
@@ -209,19 +201,6 @@ def build_periodic_schedule(
 
 	schedule: list[dict] = []
 	index = 0
-
-	if f == "once":
-		due_date = base if commitment_timing == "start" else contract_end
-		if due_date <= contract_end:
-			schedule.append({
-				"index": 0,
-				"due_date": due_date,
-				"period_start": base,
-				"period_end": contract_end,
-				"amount": float(amount),
-				"period_label": get_period_label(base, f, 0),
-			})
-		return schedule
 
 	if f == "weekly":
 		period_start = base
@@ -431,27 +410,6 @@ def analyze_fixed_periodic_charge(charge, contract_end_date) -> dict:
 	handling = charge.get("last_period_handling") or "none"
 	manual_amount = float(charge.get("last_period_adjustment_amount") or 0)
 	is_end_timing = charge.get("commitment_timing") == "end"
-
-	# Single-period services (once/one_time): interval.months === 0 && interval.days === 0
-	# Source: utils.ts:450 — if (interval.months === 0 && interval.days === 0)
-	days = get_frequency_days(f)
-	if months == 0 and days == 0:
-		due_date = end if is_end_timing else start
-		return {
-			"full_cycles": [],
-			"partial_period": {"exists": False, "start_date": None, "end_date": None, "handling": handling, "amount": 0},
-			"full_cycles_total": 0,
-			"settlement_amount": 0,
-			"total_amount": amount,
-			"dues": [{
-				"index": 0,
-				"due_date": due_date,
-				"period_start": start,
-				"period_end": end,
-				"amount": amount,
-				"period_label": "دفعة واحدة",
-			}],
-		}
 
 	anchor_day = start.day
 	full_cycles = []

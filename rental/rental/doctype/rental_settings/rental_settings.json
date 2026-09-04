@@ -202,7 +202,7 @@
    "fieldname": "default_payment_frequency",
    "fieldtype": "Select",
    "label": "Default Payment Frequency",
-   "options": "once\nmonthly\nbi_monthly\nquarterly\nsemi_annual\nannual"
+   "options": "monthly\nbi_monthly\nquarterly\nsemi_annual\nannual"
   },
   {
    "fieldname": "default_payment_method",

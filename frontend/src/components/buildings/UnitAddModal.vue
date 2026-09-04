@@ -5,16 +5,17 @@
         <FormField label="رقم الوحدة" required>
           <input v-model="form.unit_number" type="text" required placeholder="101" class="input-premium" />
         </FormField>
-        <FormField label="نوع الوحدة">
-          <select v-model="form.unit_type" required class="input-premium">
-            <option value="apartment">شقة</option>
-            <option value="shop">محل</option>
-            <option value="office">مكتب</option>
-            <option value="warehouse">مستودع</option>
-            <option value="room">غرفة</option>
-            <option value="garage">كراج</option>
-            <option value="independent">عقار مستقل</option>
-            <option value="other">أخرى</option>
+        <FormField label="نوع الوحدة" required :error="unitTypeError">
+          <select
+            ref="unitTypeSelect"
+            v-model="form.unit_type"
+            required
+            class="input-premium"
+            :class="{ 'border-red-500': unitTypeError }"
+            @change="onUnitTypeChange"
+          >
+            <option value="">— اختر —</option>
+            <option v-for="t in unitTypes" :key="t.name" :value="t.name">{{ t.type_name }}</option>
           </select>
         </FormField>
         <FormField label="الطابق">
@@ -29,22 +30,19 @@
             <span class="absolute top-1/2 -translate-y-1/2 text-xs font-medium text-navy-400 icon-start">م²</span>
           </div>
         </FormField>
-        <FormField label="عدد الغرف">
-          <input v-model.number="form.rooms_count" type="number" dir="ltr" placeholder="0" class="input-premium" />
-        </FormField>
-        <FormField label="عدد الحمامات">
-          <input v-model.number="form.bathrooms_count" type="number" dir="ltr" placeholder="0" class="input-premium" />
-        </FormField>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FormField label="آخر قراءة كهرباء">
-          <input v-model="form.current_electricity_meter_reading" type="text" dir="ltr" placeholder="أدخل قراءة العداد" class="input-premium" />
-        </FormField>
-        <FormField label="آخر قراءة مياه">
-          <input v-model="form.current_water_meter_reading" type="text" dir="ltr" placeholder="أدخل قراءة العداد" class="input-premium" />
-        </FormField>
-      </div>
+      <!-- Dynamic attributes + meter fields -->
+      <UnitAttributeFields
+        v-if="form.unit_type"
+        :unit-type="form.unit_type"
+        :existing-values="{}"
+        :existing-meter-form="{}"
+        :show-meter-fields="true"
+        @update:attribute-values="attrValues = $event"
+        @update:meter-form="meterForm = $event"
+      />
+
       <FormField label="ملاحظات">
         <textarea v-model="form.notes" rows="2" placeholder="أي ملاحظات إضافية..." class="input-premium"></textarea>
       </FormField>
@@ -63,8 +61,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { frappeRequest } from 'frappe-ui'
 import { extractError } from '@/composables/useApi'
+import { callApi } from '@/composables/useApi'
 import Modal from '@/components/ui/Modal.vue'
 import FormField from '@/components/ui/FormField.vue'
+import UnitAttributeFields from '@/components/buildings/UnitAttributeFields.vue'
 
 const props = defineProps({
   buildingName: { type: String, required: true },
@@ -76,17 +76,23 @@ const emit = defineEmits(['close', 'saved'])
 
 const form = ref({
   unit_number: '',
-  unit_type: 'apartment',
+  unit_type: '',
   floor: props.preselectedFloor || '',
   area: null,
-  rooms_count: null,
-  bathrooms_count: null,
-  current_electricity_meter_reading: '',
-  current_water_meter_reading: '',
   notes: '',
   building: props.buildingName,
 })
 const saving = ref(false)
+const unitTypes = ref([])
+const unitTypeError = ref('')
+const unitTypeSelect = ref(null)
+const attrValues = ref({})
+const meterForm = ref({
+  electricity_meter_number: '',
+  current_electricity_meter_reading: '',
+  water_meter_number: '',
+  current_water_meter_reading: '',
+})
 
 const suggestedUnitNumber = computed(() => {
   if (!props.existingUnits || props.existingUnits.length === 0) return '1'
@@ -97,20 +103,69 @@ const suggestedUnitNumber = computed(() => {
   return String(Math.max(...nums) + 1)
 })
 
-// Apply suggested unit number on mount (source: page.tsx:305-315, 490)
+async function fetchUnitTypes() {
+  try {
+    const res = await callApi('rental.rental.api.property.get_active_unit_types')
+    unitTypes.value = res.unitTypes || []
+  } catch { unitTypes.value = [] }
+}
+
+function onUnitTypeChange() {
+  // Reset attribute values when type changes — existing values are not loaded for new units
+  attrValues.value = {}
+  // Clear validation error when a valid type is selected
+  if (form.value.unit_type) {
+    unitTypeError.value = ''
+  }
+}
+
 onMounted(() => {
   if (!form.value.unit_number) {
     form.value.unit_number = suggestedUnitNumber.value
   }
+  fetchUnitTypes()
 })
 
 async function save() {
+  // Frontend validation: unit_type is required before sending to backend
+  if (!form.value.unit_type) {
+    unitTypeError.value = 'نوع الوحدة مطلوب'
+    unitTypeSelect.value?.focus()
+    return
+  }
   saving.value = true
   try {
     const payload = { ...form.value }
+    // Clean empty/null from core fields
     Object.keys(payload).forEach(k => {
       if (payload[k] === '' || payload[k] === null) delete payload[k]
     })
+
+    // Add meter fields only if capabilities are enabled
+    if (meterForm.value.electricity_meter_number) {
+      payload.electricity_meter_number = meterForm.value.electricity_meter_number
+    }
+    if (meterForm.value.current_electricity_meter_reading) {
+      payload.current_electricity_meter_reading = meterForm.value.current_electricity_meter_reading
+    }
+    if (meterForm.value.water_meter_number) {
+      payload.water_meter_number = meterForm.value.water_meter_number
+    }
+    if (meterForm.value.current_water_meter_reading) {
+      payload.current_water_meter_reading = meterForm.value.current_water_meter_reading
+    }
+
+    // Add attribute values as JSON string
+    const cleanAttrValues = {}
+    for (const [k, v] of Object.entries(attrValues.value)) {
+      if (v !== null && v !== '' && v !== undefined) {
+        cleanAttrValues[k] = v
+      }
+    }
+    if (Object.keys(cleanAttrValues).length > 0) {
+      payload.attribute_values = JSON.stringify(cleanAttrValues)
+    }
+
     await frappeRequest({
       url: '/api/method/rental.rental.api.property.create_unit',
       method: 'POST',

@@ -1,6 +1,14 @@
 [pre_model_sync]
 # Patches added in this section will be executed before doctypes are migrated
 # Read docs to understand patches: https://frappeframework.com/docs/v14/user/en/database-migrations
+rental.rental.patches.v1_sync_unit_attribute_value_schema
 
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
+rental.rental.patches.v1_seed_system_unit_types
+rental.rental.patches.v1_seed_system_unit_attributes
+rental.rental.patches.v1_seed_default_type_attributes
+rental.rental.patches.v1_convert_unit_type_to_link
+rental.rental.patches.v1_migrate_rooms_bathrooms
+rental.rental.patches.v1_migrate_meter_capabilities
+rental.rental.patches.v1_cleanup_deprecated_system_attributes

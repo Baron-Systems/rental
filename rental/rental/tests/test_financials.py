@@ -171,7 +171,7 @@ class TestFinancials(FrappeTestCase):
 			"rental_account": self.account,
 			"building": building.name,
 			"unit_number": f"U-{frappe.utils.random_string(4)}",
-			"unit_type": "apartment",
+			"unit_type": frappe.db.get_value("Unit Type", {"code": "apartment", "is_system": 1}, "name"),
 		})
 		unit.insert(ignore_permissions=True)
 		self._created_units.append(unit.name)

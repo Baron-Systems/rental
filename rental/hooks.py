@@ -135,6 +135,9 @@ ACCOUNT_SCOPED_DOCTYPES = [
 	"Rental Eviction",
 	"Contract Cancellation Settlement",
 	"Cancellation Settlement Item",
+	"Unit Type",
+	"Unit Attribute",
+	"Unit Attribute Value",
 ]
 
 permission_query_conditions = {

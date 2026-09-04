@@ -532,7 +532,7 @@ function displayStatus(c) {
 }
 
 function frequencyLabel(f) {
-  return { monthly: 'شهري', bi_monthly: 'كل شهرين', quarterly: 'ربع سنوي', semi_annual: 'نصف سنوي', annual: 'سنوي', once: 'مرة واحدة' }[f] || f || ''
+  return { monthly: 'شهري', bi_monthly: 'كل شهرين', quarterly: 'ربع سنوي', semi_annual: 'نصف سنوي', annual: 'سنوي' }[f] || f || ''
 }
 
 // ---- Actions ----

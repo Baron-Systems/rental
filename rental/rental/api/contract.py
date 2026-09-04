@@ -340,6 +340,8 @@ def get_contract(name):
 			as_dict=True,
 		)
 		if unit:
+			if unit.get("unit_type"):
+				unit["unit_type_name"] = frappe.db.get_value("Unit Type", unit["unit_type"], "type_name") or ""
 			result["unit"] = unit
 			result["unit_number"] = unit.unit_number
 

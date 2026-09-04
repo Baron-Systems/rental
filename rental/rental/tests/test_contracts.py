@@ -159,7 +159,7 @@ class TestContracts(FrappeTestCase):
 			"rental_account": self.account,
 			"building": building,
 			"unit_number": unit_number,
-			"unit_type": "apartment",
+			"unit_type": frappe.db.get_value("Unit Type", {"code": "apartment", "is_system": 1}, "name"),
 		})
 		unit.insert(ignore_permissions=True)
 		self._created_units.append(unit.name)
@@ -527,7 +527,7 @@ class TestContracts(FrappeTestCase):
 			"rental_account": account2,
 			"building": building2,
 			"unit_number": "U-B2",
-			"unit_type": "apartment",
+			"unit_type": frappe.db.get_value("Unit Type", {"code": "apartment", "is_system": 1}, "name"),
 		}).insert(ignore_permissions=True).name
 		self._created_units.append(unit2)
 
@@ -1471,3 +1471,102 @@ class TestContracts(FrappeTestCase):
 		from rental.rental.services.archive_service import get_archive_readiness
 		readiness = get_archive_readiness(contract_name)
 		self.assertFalse(readiness["eligible"], "Archive should be blocked while balance != 0")
+
+	# --- Payment Frequency: 'once' removed, 5 periodic frequencies supported ---
+
+	def test_payment_frequency_once_rejected_by_backend(self):
+		"""Backend must reject 'once' as a payment_frequency."""
+		building = self._create_building("Freq Once Reject Building")
+		unit = self._create_unit(building, "U-FO")
+		tenant = self._create_tenant("Freq Once Tenant")
+
+		frappe.set_user("Administrator")
+		contract = frappe.get_doc({
+			"doctype": "Lease Contract",
+			"rental_account": self.account,
+			"tenant": tenant,
+			"building": building,
+			"unit": unit,
+			"start_date": frappe.utils.today(),
+			"end_date": frappe.utils.add_days(frappe.utils.today(), 365),
+			"rent_amount": 500,
+			"payment_frequency": "once",
+			"commitment_timing": "start",
+			"status": "draft",
+		})
+		with self.assertRaises(frappe.ValidationError):
+			contract.insert(ignore_permissions=True)
+
+	def test_payment_frequency_one_time_alias_rejected(self):
+		"""Backend must reject 'one_time' alias as well."""
+		building = self._create_building("Freq OneTime Reject Building")
+		unit = self._create_unit(building, "U-OT")
+		tenant = self._create_tenant("Freq OneTime Tenant")
+
+		frappe.set_user("Administrator")
+		contract = frappe.get_doc({
+			"doctype": "Lease Contract",
+			"rental_account": self.account,
+			"tenant": tenant,
+			"building": building,
+			"unit": unit,
+			"start_date": frappe.utils.today(),
+			"end_date": frappe.utils.add_days(frappe.utils.today(), 365),
+			"rent_amount": 500,
+			"payment_frequency": "one_time",
+			"commitment_timing": "start",
+			"status": "draft",
+		})
+		with self.assertRaises(frappe.ValidationError):
+			contract.insert(ignore_permissions=True)
+
+	def test_payment_frequency_five_supported_frequencies(self):
+		"""All 5 supported periodic frequencies should be accepted."""
+		building = self._create_building("Freq Five Building")
+		unit = self._create_unit(building, "U-F5")
+		tenant = self._create_tenant("Freq Five Tenant")
+
+		supported = ["monthly", "bi_monthly", "quarterly", "semi_annual", "annual"]
+		for freq in supported:
+			frappe.set_user("Administrator")
+			contract = frappe.get_doc({
+				"doctype": "Lease Contract",
+				"rental_account": self.account,
+				"tenant": tenant,
+				"building": building,
+				"unit": unit,
+				"start_date": frappe.utils.today(),
+				"end_date": frappe.utils.add_days(frappe.utils.today(), 365),
+				"rent_amount": 500,
+				"payment_frequency": freq,
+				"commitment_timing": "start",
+				"status": "draft",
+			})
+			contract.insert(ignore_permissions=True)
+			self.assertEqual(
+				frappe.db.get_value("Lease Contract", contract.name, "payment_frequency"),
+				freq,
+				f"Frequency '{freq}' should be accepted",
+			)
+			# Clean up: delete the draft so the unit is free for the next frequency
+			frappe.delete_doc("Lease Contract", contract.name, force=True)
+
+	def test_payment_frequency_once_not_in_payment_frequencies_constant(self):
+		"""PAYMENT_FREQUENCIES constant must not contain 'once'."""
+		from rental.rental.utils.date_utils import PAYMENT_FREQUENCIES
+		self.assertNotIn("once", PAYMENT_FREQUENCIES)
+		self.assertEqual(
+			set(PAYMENT_FREQUENCIES),
+			{"monthly", "bi_monthly", "quarterly", "semi_annual", "annual"},
+		)
+
+	def test_payment_frequency_once_not_in_doctype_options(self):
+		"""Lease Contract DocType Select options must not contain 'once'."""
+		meta = frappe.get_meta("Lease Contract")
+		field = meta.get_field("payment_frequency")
+		options = field.options.split("\n")
+		self.assertNotIn("once", options)
+		self.assertEqual(
+			set(options),
+			{"monthly", "bi_monthly", "quarterly", "semi_annual", "annual"},
+		)

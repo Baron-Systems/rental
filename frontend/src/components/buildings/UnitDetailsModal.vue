@@ -17,7 +17,7 @@
         </div>
       </div>
 
-      <!-- Info Grid -->
+      <!-- Core Info Grid -->
       <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
         <div class="bg-ivory-50 rounded-lg p-2.5">
           <p class="text-xs text-navy-400 mb-1">النوع</p>
@@ -27,21 +27,39 @@
           <p class="text-xs text-navy-400 mb-1">المساحة</p>
           <p class="text-sm font-semibold text-navy-800 tabular-nums">{{ unit.area ? `${unit.area} م²` : '—' }}</p>
         </div>
-        <div class="bg-ivory-50 rounded-lg p-2.5">
-          <p class="text-xs text-navy-400 mb-1">الغرف</p>
-          <p class="text-sm font-semibold text-navy-800 tabular-nums">{{ unit.rooms_count ?? '—' }}</p>
+      </div>
+
+      <!-- Dynamic Attributes -->
+      <div v-if="displayAttributes.length" class="space-y-2">
+        <p class="text-xs font-semibold text-navy-400">الخصائص</p>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div v-for="attr in displayAttributes" :key="attr.attribute" class="bg-ivory-50 rounded-lg p-2.5">
+            <p class="text-xs text-navy-400 mb-1">{{ attr.attribute_name }}</p>
+            <p class="text-sm font-semibold text-navy-800 tabular-nums">{{ formatAttributeValue(attr) }}</p>
+          </div>
         </div>
-        <div class="bg-ivory-50 rounded-lg p-2.5">
-          <p class="text-xs text-navy-400 mb-1">الحمامات</p>
-          <p class="text-sm font-semibold text-navy-800 tabular-nums">{{ unit.bathrooms_count ?? '—' }}</p>
-        </div>
-        <div class="bg-ivory-50 rounded-lg p-2.5">
-          <p class="text-xs text-navy-400 mb-1">آخر قراءة كهرباء</p>
-          <p class="text-sm font-semibold text-navy-800 tabular-nums">{{ unit.current_electricity_meter_reading || '—' }}</p>
-        </div>
-        <div class="bg-ivory-50 rounded-lg p-2.5">
-          <p class="text-xs text-navy-400 mb-1">آخر قراءة مياه</p>
-          <p class="text-sm font-semibold text-navy-800 tabular-nums">{{ unit.current_water_meter_reading || '—' }}</p>
+      </div>
+
+      <!-- Meter Fields (conditional) -->
+      <div v-if="hasElectricityMeter || hasWaterMeter" class="space-y-2">
+        <p class="text-xs font-semibold text-navy-400">العدادات</p>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div v-if="hasElectricityMeter" class="bg-ivory-50 rounded-lg p-2.5">
+            <p class="text-xs text-navy-400 mb-1">رقم عداد الكهرباء</p>
+            <p class="text-sm font-semibold text-navy-800 tabular-nums">{{ unitData.electricity_meter_number || '—' }}</p>
+          </div>
+          <div v-if="hasElectricityMeter" class="bg-ivory-50 rounded-lg p-2.5">
+            <p class="text-xs text-navy-400 mb-1">آخر قراءة كهرباء</p>
+            <p class="text-sm font-semibold text-navy-800 tabular-nums">{{ unitData.current_electricity_meter_reading || '—' }}</p>
+          </div>
+          <div v-if="hasWaterMeter" class="bg-ivory-50 rounded-lg p-2.5">
+            <p class="text-xs text-navy-400 mb-1">رقم عداد المياه</p>
+            <p class="text-sm font-semibold text-navy-800 tabular-nums">{{ unitData.water_meter_number || '—' }}</p>
+          </div>
+          <div v-if="hasWaterMeter" class="bg-ivory-50 rounded-lg p-2.5">
+            <p class="text-xs text-navy-400 mb-1">آخر قراءة مياه</p>
+            <p class="text-sm font-semibold text-navy-800 tabular-nums">{{ unitData.current_water_meter_reading || '—' }}</p>
+          </div>
         </div>
       </div>
 
@@ -108,6 +126,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { frappeRequest } from 'frappe-ui'
+import { callApi } from '@/composables/useApi'
 import Modal from '@/components/ui/Modal.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 
@@ -120,13 +139,11 @@ defineEmits(['close', 'edit', 'toggle-active', 'delete'])
 
 const loading = ref(true)
 const permissions = ref({})
+const unitData = ref({})
+const typeAttributes = ref([])
+const attributeValues = ref({})
 
-const unitTypeLabels = {
-  apartment: 'شقة', shop: 'محل', office: 'مكتب', warehouse: 'مستودع',
-  room: 'غرفة', garage: 'كراج', independent: 'عقار مستقل', other: 'أخرى',
-  Apartment: 'شقة', Shop: 'محل', Office: 'مكتب', Storage: 'مستودع', Other: 'أخرى',
-}
-const unitTypeLabel = computed(() => unitTypeLabels[props.unit.unit_type] || props.unit.unit_type || '')
+const unitTypeLabel = computed(() => unitData.value.unit_type_name || '')
 
 const statusIconBg = computed(() => {
   const map = {
@@ -138,7 +155,38 @@ const statusIconBg = computed(() => {
   return map[props.unit.status] || 'bg-ivory-100 text-navy-400'
 })
 
-// Current/upcoming contracts (matches original UnitDetailsModal)
+// Meter capability checks
+const hasElectricityMeter = computed(() => {
+  // Check if electricity_meter attribute exists in type attributes AND its value is true
+  const elecAttr = typeAttributes.value.find(a => a.capability_code === 'electricity_meter')
+  if (!elecAttr) return false
+  const val = attributeValues.value[elecAttr.attribute]
+  return val === true || val === 1
+})
+
+const hasWaterMeter = computed(() => {
+  const waterAttr = typeAttributes.value.find(a => a.capability_code === 'water_meter')
+  if (!waterAttr) return false
+  const val = attributeValues.value[waterAttr.attribute]
+  return val === true || val === 1
+})
+
+// Display attributes (exclude meter capabilities — they're shown via meter section)
+const displayAttributes = computed(() => {
+  return typeAttributes.value.filter(a => !a.capability_code)
+})
+
+// Format attribute value for display
+function formatAttributeValue(attr) {
+  const val = attributeValues.value[attr.attribute]
+  if (val === null || val === undefined || val === '') return '—'
+  if (attr.data_type === 'Check') {
+    return val ? 'نعم' : 'لا'
+  }
+  return String(val)
+}
+
+// Current/upcoming contracts
 const today = new Date()
 today.setHours(0, 0, 0, 0)
 
@@ -183,11 +231,26 @@ function formatDate(dateStr) {
 
 onMounted(async () => {
   try {
-    const res = await frappeRequest({
+    // Fetch permissions
+    const permRes = await frappeRequest({
       url: '/api/method/rental.rental.api.property.get_unit_permissions',
       params: { name: props.unit.name },
     })
-    permissions.value = res?.message || res || {}
+    permissions.value = permRes?.message || permRes || {}
+
+    // Fetch full unit data with attribute values
+    const res = await callApi('rental.rental.api.property.get_unit', { name: props.unit.name })
+    unitData.value = res
+    typeAttributes.value = res.type_attributes || []
+
+    // Extract attribute values (preserving 0, false correctly)
+    const vals = {}
+    if (res.attribute_values) {
+      for (const [k, v] of Object.entries(res.attribute_values)) {
+        vals[k] = v.value
+      }
+    }
+    attributeValues.value = vals
   } catch {
     permissions.value = { can_edit: true, can_delete: false, can_disable: false, can_reactivate: false }
   } finally {

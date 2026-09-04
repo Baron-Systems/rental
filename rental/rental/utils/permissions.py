@@ -26,7 +26,7 @@ def get_permission_query_conditions(user: str | None = None, doctype: str | None
 	if not account:
 		return None
 
-	if doctype == "Rental Due Type":
+	if doctype in ("Rental Due Type", "Unit Type", "Unit Attribute"):
 		return f"""(`tab{doctype}`.`rental_account` = "{account}" OR `tab{doctype}`.`is_system` = 1 OR `tab{doctype}`.`rental_account` IS NULL)"""
 
 	return f'`tab{doctype}`.`rental_account` = "{account}"'
@@ -42,7 +42,7 @@ def has_account_permission(doc, user: str | None = None) -> bool:
 	if not hasattr(doc, "rental_account"):
 		return True
 
-	if doc.doctype == "Rental Due Type":
+	if doc.doctype in ("Rental Due Type", "Unit Type", "Unit Attribute"):
 		if doc.get("is_system"):
 			return True
 		if not doc.get("rental_account"):

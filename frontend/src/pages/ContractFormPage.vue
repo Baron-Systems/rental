@@ -260,7 +260,7 @@ async function loadContract() {
           commitment_timing: charge.commitment_timing || charge.commitmentTiming || undefined,
           last_period_handling: charge.last_period_handling || charge.lastPeriodHandling || undefined,
           last_period_adjustment_amount: charge.last_period_adjustment_amount != null ? String(charge.last_period_adjustment_amount) : (charge.lastPeriodAdjustmentAmount != null ? String(charge.lastPeriodAdjustmentAmount) : undefined),
-          opening_meter_reading: charge.opening_meter_reading || charge.openingMeterReading || undefined,
+          opening_meter_reading: (charge.opening_meter_reading ?? charge.openingMeterReading) ?? undefined,
         })),
         terms: c.terms || '',
         witnesses: c.witnesses || '',

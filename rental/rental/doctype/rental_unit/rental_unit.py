@@ -81,5 +81,22 @@ class RentalUnit(frappe.model.document.Document):
 				frappe._("لا يمكن حذف وحدة تحتوي على سجلات استخدام (عقود، إخلاء، مستحقات، أو تحصيلات)")
 			)
 
+		# Unit Attribute Values are owned/dependent data of the unit.
+		# Delete them here (before Frappe's check_if_doc_is_linked runs)
+		# so that attribute values don't block unit deletion.
+		# This runs AFTER the business-dependency checks above, so if the
+		# unit has contracts/dues/receipts/evictions, we throw before
+		# touching any attribute values — no partial delete.
+		attr_values = frappe.db.get_all(
+			"Unit Attribute Value",
+			filters={"unit": self.name},
+			pluck="name",
+		)
+		for val_name in attr_values:
+			frappe.delete_doc(
+				"Unit Attribute Value", val_name,
+				ignore_permissions=True, force=True,
+			)
+
 	def after_delete(self):
 		update_building_counts(self.building)

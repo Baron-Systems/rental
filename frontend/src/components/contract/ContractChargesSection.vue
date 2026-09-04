@@ -16,6 +16,8 @@
       :dueTypes="dueTypes"
       :allCharges="charges"
       :isSystem="true"
+      :electricityMeter="electricityMeter"
+      :waterMeter="waterMeter"
       @update="updateCharge"
     />
 
@@ -35,6 +37,8 @@
       :dueTypes="dueTypes"
       :allCharges="charges"
       :isSystem="false"
+      :electricityMeter="electricityMeter"
+      :waterMeter="waterMeter"
       @update="updateCharge"
       @remove="removeCustomService"
     />
@@ -83,6 +87,13 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue'])
 
+// ---- Meter capabilities from the selected unit ----
+// The unit object from get_units includes electricity_meter and water_meter
+// booleans (backend-provided). We do NOT infer from meter number, reading,
+// unit type, or any other field.
+const electricityMeter = computed(() => !!(props.unit && (props.unit.electricity_meter || props.unit.electricityMeter)))
+const waterMeter = computed(() => !!(props.unit && (props.unit.water_meter || props.unit.waterMeter)))
+
 // ---- Constants (ported from contract-charge.service.ts) ----
 const SYSTEM_CODES = ['electricity', 'water', 'rent']
 
@@ -124,7 +135,6 @@ const LAST_PERIOD_HANDLING_LABELS = {
 
 const FREQUENCY_LABELS = {
   weekly: 'أسبوعي',
-  once: 'مرة واحدة',
   monthly: 'شهريًا',
   bi_monthly: 'كل شهرين',
   quarterly: 'ربع سنويًا',
@@ -146,14 +156,27 @@ function getMeterField(code) {
 function getDefaultCalculationMethodForDueType(code, responsibility, paymentBy) {
   if (responsibility !== 'tenant') return null
   if (paymentBy === PAYMENT_BY.tenant) return null
+  // Legacy default: metered for electricity/water, fixed_periodic for others.
+  // Capability does NOT change the default — it only controls whether "metered"
+  // appears in the dropdown. If the unit lacks the meter, the default metered
+  // value will be shown as invalid and the user must explicitly choose.
   return isMeteredDueTypeCode(code) ? CALCULATION_METHODS.metered : CALCULATION_METHODS.fixed_periodic
 }
 
-function getAvailableCalculationMethodsForDueType(code, paymentBy) {
+function getAvailableCalculationMethodsForDueType(code, paymentBy, elecMeter, waterMeter) {
   if (paymentBy === PAYMENT_BY.tenant) return []
-  const methods = isMeteredDueTypeCode(code)
-    ? [CALCULATION_METHODS.metered, CALCULATION_METHODS.fixed_periodic, CALCULATION_METHODS.actual_bill]
-    : [CALCULATION_METHODS.fixed_periodic, CALCULATION_METHODS.actual_bill, CALCULATION_METHODS.on_demand]
+  let methods
+  if (isMeteredDueTypeCode(code)) {
+    methods = [CALCULATION_METHODS.metered, CALCULATION_METHODS.fixed_periodic, CALCULATION_METHODS.actual_bill]
+    if (code === 'electricity' && !elecMeter) {
+      methods = methods.filter((m) => m !== CALCULATION_METHODS.metered)
+    }
+    if (code === 'water' && !waterMeter) {
+      methods = methods.filter((m) => m !== CALCULATION_METHODS.metered)
+    }
+  } else {
+    methods = [CALCULATION_METHODS.fixed_periodic, CALCULATION_METHODS.actual_bill, CALCULATION_METHODS.on_demand]
+  }
   return methods.map((m) => ({ value: m, label: CALCULATION_METHOD_LABELS[m] }))
 }
 
@@ -216,7 +239,11 @@ function getCleanChargeItem(dueType, responsibility, unit) {
   if (isTenant && paymentBy === PAYMENT_BY.landlord && defaultMethod === CALCULATION_METHODS.metered && isMeteredDueTypeCode(code)) {
     const field = getMeterField(code)
     if (field && unit) {
-      openingMeterReading = unit[field] || undefined
+      // Preserve zero — only use undefined when the field is truly absent
+      const raw = unit[field]
+      if (raw !== null && raw !== undefined && raw !== '') {
+        openingMeterReading = raw
+      }
     }
   }
 
@@ -297,10 +324,16 @@ function applyCalcMethodDefaults(charge, method) {
 
   if (method === CALCULATION_METHODS.metered && isMeteredDueTypeCode(getChargeCode(ch))) {
     const field = getMeterField(getChargeCode(ch))
-    if (field && props.unit && !ch.opening_meter_reading) {
-      ch.opening_meter_reading = props.unit[field] || undefined
+    if (field && props.unit && (ch.opening_meter_reading === undefined || ch.opening_meter_reading === null || ch.opening_meter_reading === '')) {
+      // Preserve zero — only pre-fill when the field is truly absent
+      const raw = props.unit[field]
+      if (raw !== null && raw !== undefined && raw !== '') {
+        ch.opening_meter_reading = raw
+      }
     }
   } else if (method !== CALCULATION_METHODS.metered) {
+    // Do not delete historical stored readings when method changes away from metered.
+    // Only clear the operational field for the current edit session.
     ch.opening_meter_reading = undefined
   }
   return ch
