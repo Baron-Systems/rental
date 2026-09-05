@@ -61,6 +61,7 @@
 import { computed } from 'vue'
 import PrintHeader from '@/components/print/PrintHeader.vue'
 import { formatMoney, formatDate } from '@/composables/useApi'
+import { getContractDisplayStatus } from '@/utils/contractUtils.js'
 
 const props = defineProps({
   contracts: { type: Array, default: () => [] },
@@ -121,12 +122,8 @@ function getBuildingUnit(c) {
 }
 
 function statusLabel(c) {
-  const status = c.status || c.displayStatus
-  const labels = {
-    draft: 'مسودة', active: 'نشط', expired: 'منتهي',
-    cancelled: 'ملغي', evicted: 'مخلى', pending_eviction: 'بانتظار الإخلاء',
-  }
-  return labels[status] || status || '—'
+  // Source: ContractsPage.vue:530 — use unified display status (period-based override)
+  return getContractDisplayStatus(c).label
 }
 </script>
 

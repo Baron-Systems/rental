@@ -176,7 +176,7 @@
                   <TableCell>{{ (c.unit && c.unit.unit_number) || '—' }}</TableCell>
                   <TableCell>{{ formatDate(c.start_date) }}</TableCell>
                   <TableCell>{{ formatDate(c.end_date) }}</TableCell>
-                  <TableCell><StatusBadge :status="c.status" /></TableCell>
+                  <TableCell><StatusBadge :status="displayStatus(c).status" :label="displayStatus(c).label" /></TableCell>
                 </TableRow>
               </DataTable>
             </Card>
@@ -192,7 +192,7 @@
                   <TableCell>{{ (c.unit && c.unit.unit_number) || '—' }}</TableCell>
                   <TableCell>{{ formatDate(c.start_date) }}</TableCell>
                   <TableCell>{{ formatDate(c.end_date) }}</TableCell>
-                  <TableCell><StatusBadge :status="c.status === 'active' ? 'upcoming' : c.status" /></TableCell>
+                  <TableCell><StatusBadge :status="displayStatus(c).status" :label="displayStatus(c).label" /></TableCell>
                 </TableRow>
               </DataTable>
             </Card>
@@ -206,7 +206,7 @@
                   <TableCell><router-link :to="{ name: 'ContractDetail', params: { id: c.name } }" class="font-semibold text-navy-800 hover:text-gold-600">{{ c.contract_number || c.name }}</router-link></TableCell>
                   <TableCell>{{ c.tenant_name || (c.tenant && c.tenant.full_name) || '—' }}</TableCell>
                   <TableCell>{{ (c.unit && c.unit.unit_number) || '—' }}</TableCell>
-                  <TableCell><StatusBadge :status="c.status" /></TableCell>
+                  <TableCell><StatusBadge :status="displayStatus(c).status" :label="displayStatus(c).label" /></TableCell>
                 </TableRow>
               </DataTable>
             </Card>
@@ -318,7 +318,7 @@ import { callApi, formatMoney, extractError } from '@/composables/useApi'
 import { useSession } from '@/composables/useSession'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
-import { getContractPeriodStatus } from '@/utils/contractUtils'
+import { getContractPeriodStatus, getContractDisplayStatus } from '@/utils/contractUtils'
 
 const router = useRouter()
 const route = useRoute()
@@ -418,6 +418,11 @@ const pastContracts = computed(() => contracts.value.filter(c => {
   const period = getContractPeriodStatus(c.start_date, c.end_date, today)
   return !['active', 'draft'].includes(c.status) || period === 'past'
 }))
+
+// Source: ContractsPage.vue:530 — unified display status (period-based override)
+function displayStatus(c) {
+  return getContractDisplayStatus(c)
+}
 
 // Active contracts with current period (source: page.tsx:875-880)
 const activeContractsCount = computed(() =>

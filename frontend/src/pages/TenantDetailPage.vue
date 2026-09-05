@@ -123,7 +123,7 @@
                   {{ formatDate(c.start_date) }} - {{ formatDate(c.end_date) }}
                 </span>
               </TableCell>
-              <TableCell><StatusBadge :status="c.status" /></TableCell>
+              <TableCell><StatusBadge :status="displayStatus(c).status" :label="displayStatus(c).label" /></TableCell>
               <TableCell><span class="font-bold tabular-nums" :class="balanceNumberClass(c.balance)">{{ formatMoney(c.balance, currency) }}</span></TableCell>
               <TableCell>
                 <router-link :to="`/contracts/${c.name}/preview`" target="_blank" class="text-navy-500 hover:text-gold-600" title="معاينة">
@@ -151,6 +151,7 @@ import StatusBadge from '@/components/ui/StatusBadge.vue'
 import { callApi, formatMoney, formatDate, extractError } from '@/composables/useApi'
 import { useSession } from '@/composables/useSession'
 import { useToast } from '@/composables/useToast'
+import { getContractDisplayStatus } from '@/utils/contractUtils.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -203,6 +204,11 @@ function balanceNumberClass(bal) {
   if (bal > 0) return 'text-red-600'
   if (bal < 0) return 'text-emerald-600'
   return 'text-navy-500'
+}
+
+// Source: ContractsPage.vue:530 — unified display status (period-based override)
+function displayStatus(c) {
+  return getContractDisplayStatus(c)
 }
 
 function contractLabel(c) {
