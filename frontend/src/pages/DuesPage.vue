@@ -370,7 +370,7 @@
     </div>
 
     <!-- Print Document (source: dues/page.tsx:1491-1501) -->
-    <div v-if="printData" class="dues-list-print-document">
+    <div v-if="printData" class="print-only dues-list-print-document">
       <DuesListPrintDocument
         :dues="printData.dues"
         :applied-filters="printData.appliedFilters"
