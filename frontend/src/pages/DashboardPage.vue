@@ -46,8 +46,8 @@
       </div>
 
       <template v-else>
-        <!-- KPI Cards — single strip, lighter dividers, strong values -->
-        <div class="grid grid-cols-1 gap-px sm:grid-cols-2 lg:grid-cols-3 rounded-[14px] border border-ivory-300 bg-white overflow-hidden">
+        <!-- KPI Cards — 4 primary metrics in a single row -->
+        <div class="grid grid-cols-1 gap-px sm:grid-cols-2 lg:grid-cols-4 rounded-[14px] border border-ivory-300 bg-white overflow-hidden">
           <div
             v-for="(card, i) in kpiCards"
             :key="card.label"
@@ -166,20 +166,6 @@
             />
           </div>
 
-          <div class="mt-4 grid grid-cols-3 gap-4 sm:gap-6">
-            <div>
-              <p class="text-xs text-navy-400 mb-1">إجمالي المستحقات</p>
-              <p class="text-lg font-bold text-navy-900">{{ formatMoney(stats.totalDues, currency) }}</p>
-            </div>
-            <div class="text-center">
-              <p class="text-xs text-navy-400 mb-1">صافي التحصيل</p>
-              <p class="text-lg font-bold text-emerald-600">{{ formatMoney(stats.netCollections, currency) }}</p>
-            </div>
-            <div class="text-left">
-              <p class="text-xs text-navy-400 mb-1">المتبقي</p>
-              <p class="text-lg font-bold text-navy-900">{{ formatMoney(stats.totalBalance, currency) }}</p>
-            </div>
-          </div>
         </div>
       </template>
     </div>
@@ -243,7 +229,25 @@ const quickActions = [
   { label: 'دفعة', href: '/receipts', icon: IconBanknote, primary: false },
 ]
 
-// ---- KPI cards (minimal variant) ----
+// ---- Balance display helpers ----
+const balanceValue = computed(() => stats.value?.totalBalance ?? 0)
+const balanceLabel = computed(() => {
+  const v = balanceValue.value
+  if (v > 0) return 'على المستأجر'
+  if (v < 0) return 'لصالح المستأجر'
+  return 'لا يوجد رصيد'
+})
+const balanceDisplayValue = computed(() =>
+  formatMoney(Math.abs(balanceValue.value), currency.value)
+)
+const balanceColorClass = computed(() => {
+  const v = balanceValue.value
+  if (v > 0) return 'text-navy-900'
+  if (v < 0) return 'text-blue-600'
+  return 'text-navy-400'
+})
+
+// ---- KPI cards (4 primary metrics) ----
 const kpiCards = computed(() => [
   {
     label: 'إجمالي المستحقات',
@@ -255,40 +259,22 @@ const kpiCards = computed(() => [
     trendLabel: 'حتى اليوم',
   },
   {
-    label: 'إجمالي المقبوضات',
-    value: formatMoney(stats.value?.totalReceipts ?? 0, currency.value),
-    icon: IconBanknote,
-    href: '/receipts',
-    iconClass: 'text-emerald-600',
-    trend: 'up',
-    trendLabel: 'Gross Receipts',
-  },
-  {
-    label: 'المبالغ المردودة',
-    value: formatMoney(stats.value?.totalRefunds ?? 0, currency.value),
-    icon: IconBanknote,
-    href: '/receipts',
-    iconClass: 'text-blue-600',
-    trend: 'neutral',
-    trendLabel: 'Refunds',
-  },
-  {
     label: 'صافي التحصيل',
     value: formatMoney(stats.value?.netCollections ?? 0, currency.value),
     icon: IconBanknote,
     href: '/receipts',
     iconClass: 'text-emerald-600',
     trend: 'up',
-    trendLabel: 'المقبوضات − المردودات',
+    trendLabel: 'التحصيل الفعلي',
   },
   {
     label: 'الرصيد المستحق',
-    value: formatMoney(stats.value?.totalBalance ?? 0, currency.value),
+    value: balanceDisplayValue.value,
     icon: IconAlertCircle,
     href: '/tenants',
-    iconClass: 'text-navy-600',
-    trend: 'down',
-    trendLabel: 'المتبقي للتحصيل',
+    iconClass: balanceColorClass.value,
+    trend: 'neutral',
+    trendLabel: balanceLabel.value,
   },
   {
     label: 'نسبة الإشغال',

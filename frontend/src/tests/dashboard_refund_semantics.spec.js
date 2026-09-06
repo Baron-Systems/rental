@@ -49,12 +49,12 @@ function createCollectionRate(stats) {
 
 function createKpiCards(stats, currency) {
   const fmt = (v) => v // simplified
+  const balanceValue = stats.totalBalance ?? 0
+  const balanceDisplay = Math.abs(balanceValue)
   return [
     { label: 'إجمالي المستحقات', value: fmt(stats.totalDues ?? 0) },
-    { label: 'إجمالي المقبوضات', value: fmt(stats.totalReceipts ?? 0) },
-    { label: 'المبالغ المردودة', value: fmt(stats.totalRefunds ?? 0) },
     { label: 'صافي التحصيل', value: fmt(stats.netCollections ?? 0) },
-    { label: 'الرصيد المستحق', value: fmt(stats.totalBalance ?? 0) },
+    { label: 'الرصيد المستحق', value: fmt(balanceDisplay) },
     { label: 'نسبة الإشغال', value: `${stats.occupancyRate ?? 0}%` },
   ]
 }
@@ -170,17 +170,25 @@ describe('Phase 4 — Dashboard Refund Semantics', () => {
     expect(months[1].netCollections < 0).toBe(true)
   })
 
-  // 10. KPI labels correct
+  // 10. KPI labels correct (4 primary cards)
   it('10) KPI cards have correct labels', () => {
     const stats = createDashboardStats({ totalDues: 5000, totalReceipts: 5410, totalRefunds: 410 })
     stats.occupancyRate = 75
     const cards = createKpiCards(stats, 'ILS')
+    expect(cards).toHaveLength(4)
     expect(cards[0].label).toBe('إجمالي المستحقات')
-    expect(cards[1].label).toBe('إجمالي المقبوضات')
-    expect(cards[2].label).toBe('المبالغ المردودة')
-    expect(cards[3].label).toBe('صافي التحصيل')
-    expect(cards[4].label).toBe('الرصيد المستحق')
-    expect(cards[5].label).toBe('نسبة الإشغال')
+    expect(cards[1].label).toBe('صافي التحصيل')
+    expect(cards[2].label).toBe('الرصيد المستحق')
+    expect(cards[3].label).toBe('نسبة الإشغال')
+  })
+
+  // 10b. Balance card shows absolute value for negative balance
+  it('10b) Balance card shows absolute value for credit balance', () => {
+    const stats = createDashboardStats({ totalDues: 5000, totalReceipts: 5500, totalRefunds: 0 })
+    stats.occupancyRate = 50
+    const cards = createKpiCards(stats, 'ILS')
+    const balanceCard = cards.find(c => c.label === 'الرصيد المستحق')
+    expect(balanceCard.value).toBe(500) // abs(-500) = 500
   })
 
   // 11. AreaChart supports negative values
