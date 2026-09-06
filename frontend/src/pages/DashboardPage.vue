@@ -105,10 +105,34 @@
             <div class="flex items-start justify-between gap-4 mb-4">
               <div class="flex-1 min-w-0">
                 <h2 class="text-base font-semibold text-navy-900">التدفقات المالية</h2>
-                <p class="mt-1 text-sm text-navy-400">المستحقات مقابل التحصيلات (آخر 6 أشهر)</p>
+                <p class="mt-1 text-sm text-navy-400">
+                  المستحقات مقابل التحصيلات (آخر 6 أشهر)
+                  <span v-if="trendCurrency" class="text-navy-300"> · {{ trendCurrency }}</span>
+                </p>
               </div>
+              <!-- Account selector — System Manager with multiple accounts only -->
+              <select
+                v-if="showAccountSelector"
+                v-model="selectedTrendAccount"
+                @change="fetchTrend"
+                class="rounded-[8px] border border-ivory-300 bg-white px-3 py-1.5 text-sm text-navy-900 focus:outline-none focus:ring-1 focus:ring-navy-400"
+              >
+                <option value="" disabled>اختر حسابًا</option>
+                <option v-for="a in trendAccounts" :key="a.name" :value="a.name">
+                  {{ a.account_name || a.name }} ({{ a.currency || '—' }})
+                </option>
+              </select>
             </div>
-            <AreaChart :data="trendData" :colors="chartColors" :currency="currency" />
+            <!-- No account selected (System Manager) -->
+            <div v-if="showAccountSelector && !selectedTrendAccount" class="flex items-center justify-center py-16 text-sm text-navy-400">
+              اختر حسابًا لعرض التدفقات المالية
+            </div>
+            <!-- Loading trend -->
+            <div v-else-if="trendLoading" class="flex items-center justify-center py-16">
+              <div class="h-6 w-6 animate-spin rounded-full border-2 border-navy-200 border-t-navy-600"></div>
+            </div>
+            <!-- Chart -->
+            <AreaChart v-else :data="trendData" :colors="chartColors" :currency="trendCurrency || currency" />
           </div>
 
           <!-- Donut Chart -->
@@ -277,15 +301,18 @@ const occupancyData = computed(() => [
   { name: 'محجوزة', value: stats.value?.reservedUnitsCount ?? 0, fill: chartColors.reserved },
 ])
 
-// ---- Trend data (hardcoded — matches original static demo data) ----
-const trendData = [
-  { name: 'يناير', dues: 4000, receipts: 3500 },
-  { name: 'فبراير', dues: 4200, receipts: 3800 },
-  { name: 'مارس', dues: 4500, receipts: 4100 },
-  { name: 'أبريل', dues: 4300, receipts: 3900 },
-  { name: 'مايو', dues: 4800, receipts: 4500 },
-  { name: 'يونيو', dues: 5000, receipts: 4700 },
-]
+// ---- Financial trend (real data from backend) ----
+const trendData = ref([])
+const trendCurrency = ref('')
+const trendLoading = ref(false)
+
+// Account selector — System Manager with multiple accounts only
+const trendAccounts = ref([])
+const selectedTrendAccount = ref('')
+
+const showAccountSelector = computed(() =>
+  session.state.account?.is_system_admin === true && trendAccounts.value.length > 1
+)
 
 // ---- Collection performance ----
 const collectionRate = computed(() => {
@@ -308,9 +335,51 @@ async function fetchDashboard() {
   }
 }
 
+async function fetchTrendAccounts() {
+  // Only System Manager needs the account list (regular user has one account)
+  if (session.state.account?.is_system_admin !== true) return
+  try {
+    const res = await callApi('rental.rental.api.account.list_rental_accounts')
+    trendAccounts.value = res?.accounts ?? []
+  } catch {
+    trendAccounts.value = []
+  }
+}
+
+async function fetchTrend() {
+  // For System Manager with multiple accounts, wait for a selection
+  if (showAccountSelector.value && !selectedTrendAccount.value) {
+    trendData.value = []
+    trendCurrency.value = ''
+    return
+  }
+  trendLoading.value = true
+  try {
+    const params = {}
+    if (selectedTrendAccount.value) params.account = selectedTrendAccount.value
+    const res = await callApi('rental.rental.api.dashboard.get_financial_trend', params)
+    trendData.value = (res?.months ?? []).map(m => ({
+      name: m.name,
+      dues: m.dues,
+      receipts: m.receipts,
+    }))
+    trendCurrency.value = res?.currency ?? ''
+  } catch (e) {
+    trendData.value = []
+    trendCurrency.value = ''
+    toast.error(extractError(e))
+  } finally {
+    trendLoading.value = false
+  }
+}
+
 function retry() {
   window.location.reload()
 }
 
-onMounted(fetchDashboard)
+onMounted(async () => {
+  await fetchDashboard()
+  await fetchTrendAccounts()
+  await fetchTrend()
+})
 </script>

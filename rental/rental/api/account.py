@@ -73,6 +73,44 @@ def get_current_account() -> dict | None:
 	return info
 
 
+@frappe.whitelist()
+def list_rental_accounts() -> dict:
+	"""Return all active Rental Accounts with their currency.
+
+	Used by the dashboard account selector (System Manager only).
+	"""
+	from rental.rental.utils.account import is_system_manager
+
+	if not is_system_manager():
+		# Regular users have exactly one account — return it for convenience.
+		own = get_current_rental_account()
+		if not own:
+			return {"accounts": []}
+		cur = frappe.db.get_value(
+			"Rental Settings", {"rental_account": own}, "currency"
+		) or "ILS"
+		name_val = frappe.db.get_value("Rental Account", own, "account_name") or own
+		return {"accounts": [{"name": own, "account_name": name_val, "currency": cur}]}
+
+	rows = frappe.get_all(
+		"Rental Account",
+		filters={"is_active": 1},
+		fields=["name", "account_name"],
+		order_by="account_name asc",
+	)
+	accounts = []
+	for r in rows:
+		cur = frappe.db.get_value(
+			"Rental Settings", {"rental_account": r.name}, "currency"
+		) or "ILS"
+		accounts.append({
+			"name": r.name,
+			"account_name": r.account_name or r.name,
+			"currency": cur,
+		})
+	return {"accounts": accounts}
+
+
 def _get_safe_settings(account_name: str) -> dict | None:
 	"""Return lessor data in the LessorData shape expected by the frontend.
 

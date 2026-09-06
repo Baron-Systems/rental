@@ -101,6 +101,177 @@ def get_dashboard():
 
 
 # ---------------------------------------------------------------------------
+# Financial trend  (last 6 calendar months — dues vs receipts)
+# ---------------------------------------------------------------------------
+
+
+_AR_MONTHS = [
+	"يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+	"يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
+]
+
+
+def _resolve_trend_account(account: str | None) -> str:
+	"""Resolve and authorize the account for the financial trend.
+
+	- Regular user: must use their own account (``account`` may be None →
+	  defaults to their single Rental Account).
+	- System Manager: must pass an explicit ``account``; no cross-account
+	  aggregation is allowed.
+	"""
+	from rental.rental.utils.account import is_system_manager
+
+	if is_system_manager():
+		if not account:
+			frappe.throw(
+				frappe._("حدد حسابًا لعرض التدفقات المالية"),
+				frappe.ValidationError,
+			)
+		if not frappe.db.exists("Rental Account", account):
+			frappe.throw(frappe._("الحساب غير موجود"), frappe.ValidationError)
+		return account
+
+	own = get_current_rental_account()
+	if account and account != own:
+		frappe.throw(
+			frappe._("لا يمكنك عرض بيانات حساب آخر"),
+			frappe.PermissionError,
+		)
+	return own
+
+
+def _last_six_months(today: date) -> list[tuple[int, int, date, date]]:
+	"""Return the last 6 calendar months as ``(year, month, start, end_exclusive)``.
+
+	The current month is capped at ``today + 1 day`` (half-open) so only
+	days up to and including today are counted.
+	"""
+	y, m = today.year, today.month
+	for _ in range(5):
+		m -= 1
+		if m < 1:
+			m = 12
+			y -= 1
+
+	months: list[tuple[int, int, date, date]] = []
+	yy, mm = y, m
+	for _ in range(6):
+		start = date(yy, mm, 1)
+		next_first = date(yy + 1, 1, 1) if mm == 12 else date(yy, mm + 1, 1)
+		end = min(next_first, today + timedelta(days=1))
+		months.append((yy, mm, start, end))
+		mm += 1
+		if mm > 12:
+			mm = 1
+			yy += 1
+	return months
+
+
+@frappe.whitelist()
+def get_financial_trend(account: str | None = None) -> dict:
+	"""Return the last-6-months dues-vs-receipts trend for ONE account.
+
+	No cross-account aggregation. Currency is the account's currency.
+
+	Per month:
+	  - dues   = SUM(approved Rental Due.amount by due_date) − active waivers
+	  - receipts = SUM(approved Rental Receipt.amount by receipt_date)
+
+	Rules:
+	  - docstatus = 1 only (Draft/Cancelled excluded).
+	  - Archived contracts (is_archived = 1) excluded.
+	  - Months with no activity return 0 (never dropped from the series).
+	  - Current month capped at today.
+	"""
+	from rental.rental.utils.date_utils import round_money
+
+	account = _resolve_trend_account(account)
+
+	currency = (
+		frappe.db.get_value("Rental Settings", {"rental_account": account}, "currency")
+		or "ILS"
+	)
+
+	today = to_calendar_day(frappe.utils.today())
+	months = _last_six_months(today)
+
+	archived = get_archived_contract_names(account)
+	archived_sql = ""
+	archived_args: tuple = ()
+	if archived:
+		archived_sql = " AND contract NOT IN (%s)" % ",".join(
+			["%s"] * len(archived)
+		)
+		archived_args = tuple(archived)
+
+	series = []
+	for (yy, mm, start, end) in months:
+		# Approved dues gross (by due_date)
+		dues_gross = float(
+			frappe.db.sql(
+				f"""
+				SELECT COALESCE(SUM(amount), 0)
+				FROM `tabRental Due`
+				WHERE docstatus = 1
+				  AND rental_account = %s
+				  AND due_date >= %s AND due_date < %s
+				  {archived_sql}
+				""",
+				(account, start, end, *archived_args),
+			)[0][0]
+			or 0
+		)
+
+		# Active waivers linked to those dues
+		waivers = float(
+			frappe.db.sql(
+				f"""
+				SELECT COALESCE(SUM(w.amount), 0)
+				FROM `tabRental Due Waiver` w
+				JOIN `tabRental Due` d ON w.due = d.name
+				WHERE w.status = 'active'
+				  AND d.docstatus = 1
+				  AND d.rental_account = %s
+				  AND d.due_date >= %s AND d.due_date < %s
+				  {archived_sql.replace('contract', 'd.contract')}
+				""",
+				(account, start, end, *archived_args),
+			)[0][0]
+			or 0
+		)
+
+		# Approved receipts (by receipt_date)
+		receipts = float(
+			frappe.db.sql(
+				f"""
+				SELECT COALESCE(SUM(amount), 0)
+				FROM `tabRental Receipt`
+				WHERE docstatus = 1
+				  AND rental_account = %s
+				  AND receipt_date >= %s AND receipt_date < %s
+				  {archived_sql}
+				""",
+				(account, start, end, *archived_args),
+			)[0][0]
+			or 0
+		)
+
+		series.append({
+			"name": _AR_MONTHS[mm - 1],
+			"year": yy,
+			"month": mm,
+			"dues": round_money(dues_gross - waivers),
+			"receipts": round_money(receipts),
+		})
+
+	return {
+		"account": account,
+		"currency": currency,
+		"months": series,
+	}
+
+
+# ---------------------------------------------------------------------------
 # Notifications  (source: GET /api/notifications)
 # ---------------------------------------------------------------------------
 

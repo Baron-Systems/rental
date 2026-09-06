@@ -1,0 +1,1 @@
+import{_ as o,o as r,h as s,J as t}from"./vendor.c238aaf3.js";const a={},c={class:"transition-colors hover:bg-gold-50/30"};function n(e,l){return r(),s("tr",c,[t(e.$slots,"default")])}var d=o(a,[["render",n]]);export{d as default};

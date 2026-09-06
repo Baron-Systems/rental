@@ -1,0 +1,1 @@
+import{o as a,h as r,J as s,n}from"./vendor.c238aaf3.js";const c={props:{align:{type:String,default:"right"}},setup(t){return(e,o)=>(a(),r("td",{class:n(["px-[18px] py-3.5 text-sm text-navy-700 whitespace-nowrap",t.align==="center"?"text-center":"text-right"])},[s(e.$slots,"default")],2))}};export{c as default};
