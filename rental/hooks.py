@@ -9,12 +9,12 @@ app_license = "mit"
 # ------------------
 
 # Note: add_to_apps_screen and role_home_page conflict with www/frontend.html.
-# The Vue SPA is accessible directly at /frontend.
+# The Vue SPA is accessible directly at /frontend and at / (via home_page hook).
 
 # Website Route Rules
 # -------------------
 # Not used — causes 500 conflict with www/frontend.html.
-# Vue uses hash-based routing (/frontend#/login) instead.
+# Vue uses hash-based routing (/#/login or /frontend#/login) instead.
 
 # Includes in <head>
 # ------------------
@@ -52,7 +52,8 @@ app_license = "mit"
 # ----------
 
 # application home page (will override Website Settings)
-# home_page = "login"
+# Serves the Vue SPA at / — www/frontend.html is rendered for the "frontend" route.
+home_page = "frontend"
 
 # website user home page (by Role)
 # role_home_page = {
