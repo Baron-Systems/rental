@@ -375,7 +375,7 @@ def get_contract(name):
 		"Rental Receipt",
 		filters={"contract": name},
 		fields=["name", "receipt_number", "receipt_date", "amount",
-				"payment_method", "reference_number", "docstatus",
+				"transaction_type", "payment_method", "reference_number", "docstatus",
 				"cancelled_at", "cancelled_by", "notes"],
 		order_by="receipt_date asc",
 	)
@@ -1083,6 +1083,50 @@ def get_contract_balance(name):
 		frappe.throw(frappe._("العقد غير موجود"))
 	from rental.rental.services.balance_service import get_contract_balance as _get_contract_balance
 	return _get_contract_balance(name)
+
+
+@frappe.whitelist()
+def get_contract_settlement_info(name):
+	"""Get contract balance and refund/settlement eligibility for the receipt form.
+
+	Returns::
+		{
+			"balance": float,
+			"totalDues": float,
+			"totalReceipts": float,
+			"totalRefunds": float,
+			"can_settle": bool,       # operationally_closed AND not archived
+			"can_refund": bool,       # can_settle AND balance < 0
+			"is_archived": bool,
+		}
+
+	Backend is the source of truth — the frontend must NOT re-implement
+	refund or settlement eligibility logic.
+	"""
+	if not frappe.db.exists("Lease Contract", name):
+		frappe.throw(frappe._("العقد غير موجود"))
+	from rental.rental.services.balance_service import get_contract_balance as _get_contract_balance
+	from rental.rental.services.archive_service import get_archive_readiness
+	bal = _get_contract_balance(name)
+	is_archived = bool(frappe.db.get_value("Lease Contract", name, "is_archived"))
+	readiness = get_archive_readiness(name)
+	can_settle = (
+		readiness["operationally_closed"]
+		and not is_archived
+	)
+	can_refund = (
+		can_settle
+		and bal["balance"] < 0
+	)
+	return {
+		"balance": bal["balance"],
+		"totalDues": bal["totalDues"],
+		"totalReceipts": bal["totalReceipts"],
+		"totalRefunds": bal["totalRefunds"],
+		"can_settle": can_settle,
+		"can_refund": can_refund,
+		"is_archived": is_archived,
+	}
 
 
 # ---------------------------------------------------------------------------

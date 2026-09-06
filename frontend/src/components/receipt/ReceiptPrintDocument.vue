@@ -10,7 +10,8 @@
     <PrintHeader :logo="lessorData?.logo" :name="lessorData?.name" />
 
     <div class="print-keep-together border-b-2 rp-border pb-4 mb-6">
-      <h1 class="text-2xl font-bold rp-fg text-center mb-4">سند قبض</h1>
+      <h1 class="text-2xl font-bold rp-fg text-center mb-4">{{ isRefund ? 'سند صرف' : 'سند قبض' }}</h1>
+      <div v-if="isRefund" class="text-center text-sm rp-muted-fg mb-2">رد مبلغ للمستأجر</div>
       <div class="grid grid-cols-2 gap-4 text-sm">
         <div class="space-y-1">
           <div><span class="font-bold rp-fg">رقم السند:</span> {{ receipt.receipt_number || '—' }}</div>
@@ -43,8 +44,8 @@
     <div class="print-totals mt-6 border-t-2 rp-border pt-4 text-center text-sm">
       <div class="font-bold rp-fg mb-1">المبلغ</div>
       <div
-        class="text-lg font-bold"
-        :class="receipt.status === 'cancelled' ? 'rp-muted-fg line-through' : 'rp-success'"
+        class="text-lg font-bold rp-fg"
+        :class="receipt.status === 'cancelled' ? 'rp-muted-fg line-through' : ''"
       >
         {{ formatAmount(Number(receipt.amount)) }} {{ currencySymbol }} ({{ currencyLabel }})
       </div>
@@ -94,9 +95,12 @@ const currencySymbol = computed(() => {
 
 const methodLabels = { cash: 'نقداُّ', cheque: 'شيك', bank_transfer: 'تحويل بنكي', card: 'بطاقة' }
 
+const isRefund = computed(() => props.receipt?.transaction_type === 'refund')
+
 const rows = computed(() => {
   const r = props.receipt
   const result = [
+    { label: 'نوع الحركة', value: isRefund.value ? 'رد للمستأجر' : 'قبض من المستأجر' },
     { label: 'العقار', value: r.building_name || r.building || '-' },
     { label: 'الوحدة', value: r.unit_number || r.unit || '-' },
     { label: 'طريقة الدفع', value: methodLabels[r.payment_method] || r.payment_method },

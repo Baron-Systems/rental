@@ -13,6 +13,7 @@ from rental.rental.utils.date_utils import to_calendar_day
 from rental.rental.services.balance_service import (
 	get_effective_due_total,
 	get_approved_receipt_total,
+	get_approved_refund_total,
 	get_tenant_balance,
 )
 from rental.rental.services.archive_service import get_archived_contract_names
@@ -59,16 +60,21 @@ def get_dashboard():
 	# dashboard KPIs represent the active portfolio, not historical totals.
 	due_filters = {"due_date": ["<=", end_of_day]}
 	receipt_filters = {"receipt_date": ["<=", end_of_day]}
+	refund_filters = {"receipt_date": ["<=", end_of_day]}
 	if account:
 		due_filters["rental_account"] = account
 		receipt_filters["rental_account"] = account
+		refund_filters["rental_account"] = account
 	archived_contracts = get_archived_contract_names(account)
 	if archived_contracts:
 		due_filters["contract"] = ["not in", archived_contracts]
 		receipt_filters["contract"] = ["not in", archived_contracts]
+		refund_filters["contract"] = ["not in", archived_contracts]
 	total_dues = get_effective_due_total(due_filters)
 	total_receipts = get_approved_receipt_total(receipt_filters)
-	total_balance = total_dues - total_receipts
+	total_refunds = get_approved_refund_total(refund_filters)
+	net_collections = total_receipts - total_refunds
+	total_balance = total_dues - total_receipts + total_refunds
 
 	# Tenants with balance
 	tenants = frappe.get_all(
@@ -93,6 +99,8 @@ def get_dashboard():
 		"tenantsCount": len(tenants),
 		"totalDues": total_dues,
 		"totalReceipts": total_receipts,
+		"totalRefunds": total_refunds,
+		"netCollections": net_collections,
 		"totalBalance": total_balance,
 		"tenantsWithBalanceCount": tenants_with_balance,
 	}
@@ -169,19 +177,23 @@ def _last_six_months(today: date) -> list[tuple[int, int, date, date]]:
 
 @frappe.whitelist()
 def get_financial_trend(account: str | None = None) -> dict:
-	"""Return the last-6-months dues-vs-receipts trend for ONE account.
+	"""Return the last-6-months dues-vs-net-collections trend for ONE account.
 
 	No cross-account aggregation. Currency is the account's currency.
 
 	Per month:
-	  - dues   = SUM(approved Rental Due.amount by due_date) − active waivers
-	  - receipts = SUM(approved Rental Receipt.amount by receipt_date)
+	  - dues          = SUM(approved Rental Due.amount by due_date) − active waivers
+	  - grossReceipts = SUM(approved Rental Receipt.amount WHERE transaction_type='receipt')
+	  - refunds       = SUM(approved Rental Receipt.amount WHERE transaction_type='refund')
+	  - netCollections = grossReceipts − refunds
+	  - receipts      = grossReceipts (backward-compat alias)
 
 	Rules:
 	  - docstatus = 1 only (Draft/Cancelled excluded).
 	  - Archived contracts (is_archived = 1) excluded.
 	  - Months with no activity return 0 (never dropped from the series).
 	  - Current month capped at today.
+	  - netCollections can be negative (refund-only month).
 	"""
 	from rental.rental.utils.date_utils import round_money
 
@@ -240,13 +252,31 @@ def get_financial_trend(account: str | None = None) -> dict:
 			or 0
 		)
 
-		# Approved receipts (by receipt_date)
-		receipts = float(
+		# Approved receipts (by receipt_date, transaction_type='receipt' only)
+		gross_receipts = float(
 			frappe.db.sql(
 				f"""
 				SELECT COALESCE(SUM(amount), 0)
 				FROM `tabRental Receipt`
 				WHERE docstatus = 1
+				  AND transaction_type = 'receipt'
+				  AND rental_account = %s
+				  AND receipt_date >= %s AND receipt_date < %s
+				  {archived_sql}
+				""",
+				(account, start, end, *archived_args),
+			)[0][0]
+			or 0
+		)
+
+		# Approved refunds (by receipt_date, transaction_type='refund')
+		refunds = float(
+			frappe.db.sql(
+				f"""
+				SELECT COALESCE(SUM(amount), 0)
+				FROM `tabRental Receipt`
+				WHERE docstatus = 1
+				  AND transaction_type = 'refund'
 				  AND rental_account = %s
 				  AND receipt_date >= %s AND receipt_date < %s
 				  {archived_sql}
@@ -261,7 +291,10 @@ def get_financial_trend(account: str | None = None) -> dict:
 			"year": yy,
 			"month": mm,
 			"dues": round_money(dues_gross - waivers),
-			"receipts": round_money(receipts),
+			"grossReceipts": round_money(gross_receipts),
+			"refunds": round_money(refunds),
+			"netCollections": round_money(gross_receipts - refunds),
+			"receipts": round_money(gross_receipts),
 		})
 
 	return {

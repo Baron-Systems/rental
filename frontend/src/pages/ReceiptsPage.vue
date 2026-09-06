@@ -125,7 +125,7 @@
       <Card padding="none" class="overflow-hidden shadow-soft">
         <DataTable :columns="columns">
           <tr v-if="receipts.length === 0">
-            <td colspan="7" class="py-8">
+            <td colspan="8" class="py-8">
               <EmptyState
                 title="لا توجد سندات قبض"
                 description="لم يتم العثور على سندات قبض مطابقة."
@@ -156,6 +156,12 @@
               </div>
             </TableCell>
             <TableCell class="font-medium">{{ formatMoney(r.amount, currency) }}</TableCell>
+            <TableCell>
+              <span
+                class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
+                :class="r.transaction_type === 'refund' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'"
+              >{{ r.transaction_type === 'refund' ? 'رد للمستأجر' : 'قبض' }}</span>
+            </TableCell>
             <TableCell><StatusBadge :status="r.payment_method" /></TableCell>
             <TableCell><StatusBadge :status="r.status" /></TableCell>
             <TableCell @click.stop>
@@ -223,8 +229,8 @@
       <div class="relative z-10 w-full max-w-2xl max-h-[calc(100%-32px)] md:max-h-[calc(100%-48px)] overflow-hidden rounded-[14px] border border-ivory-300 bg-white shadow-xl animate-scale-in flex flex-col">
         <div class="shrink-0 p-6 pb-4 flex items-center justify-between">
           <div>
-            <h3 class="text-base font-bold text-navy-900">إنشاء سند قبض</h3>
-            <p class="mt-0.5 text-sm text-navy-400">سجل دفعة جديدة من مستأجر</p>
+            <h3 class="text-base font-bold text-navy-900">إنشاء سند</h3>
+            <p class="mt-0.5 text-sm text-navy-400">سجل دفعة أو رد مبلغ لمستأجر</p>
           </div>
           <button
             class="inline-flex h-9 w-9 items-center justify-center rounded-[10px] text-navy-400 transition-colors hover:bg-ivory-200 hover:text-navy-800"
@@ -268,6 +274,39 @@
                   الوحدة {{ selectedContract.unit_number || '—' }} — {{ selectedContract.building_name || '—' }}
                 </span>
               </div>
+
+              <!-- Contract Balance Card -->
+              <div v-if="formData.contractId && contractBalance !== null" class="md:col-span-2 rounded-lg border border-ivory-300 bg-ivory-50 px-4 py-3">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="flex items-center gap-2">
+                    <svg class="h-4 w-4 text-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                    <span class="text-sm font-medium text-navy-700">رصيد العقد</span>
+                    <span
+                      :class="contractBalance > 0 ? 'text-red-600' : contractBalance < 0 ? 'text-emerald-600' : 'text-navy-400'"
+                      class="text-sm font-bold"
+                    >{{ contractBalanceLabel }}</span>
+                  </div>
+                  <button
+                    v-if="canShowSettlement"
+                    type="button"
+                    class="btn-premium btn-outline text-sm inline-flex items-center gap-1.5"
+                    @click="handleSettleBalance"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    تسوية كامل الرصيد
+                  </button>
+                </div>
+              </div>
+
+              <!-- Transaction Type -->
+              <div v-if="showTransactionType" class="space-y-1.5">
+                <label class="text-sm font-medium text-navy-800">نوع الحركة</label>
+                <select class="input-premium" v-model="formData.transactionType" @change="handleTransactionTypeChange">
+                  <option value="receipt">قبض من المستأجر</option>
+                  <option v-if="canRefund" value="refund">رد للمستأجر</option>
+                </select>
+              </div>
+
               <div class="space-y-1.5">
                 <label class="text-sm font-medium text-navy-800">
                   التاريخ <span class="text-red-500">*</span>
@@ -289,9 +328,11 @@
                   step="0.01"
                   placeholder="0.00"
                   class="input-premium"
+                  :class="{ 'border-red-400': amountError }"
                   v-model="formData.amount"
                   required
                 />
+                <span v-if="amountError" class="text-xs text-red-500">{{ amountError }}</span>
               </div>
               <div class="space-y-1.5">
                 <label class="text-sm font-medium text-navy-800">طريقة الدفع</label>
@@ -426,6 +467,7 @@ const columns = [
   { key: 'tenant', label: 'المستأجر' },
   { key: 'date', label: 'التاريخ' },
   { key: 'amount', label: 'المبلغ' },
+  { key: 'type', label: 'النوع' },
   { key: 'method', label: 'طريقة الدفع' },
   { key: 'status', label: 'الحالة' },
   { key: 'actions', label: 'إجراءات', align: 'center' },
@@ -444,6 +486,7 @@ const creating = ref(false)
 const formData = reactive({
   tenantId: '',
   contractId: '',
+  transactionType: 'receipt',
   receiptDate: new Date().toISOString().split('T')[0],
   amount: '',
   paymentMethod: 'cash',
@@ -453,6 +496,12 @@ const formData = reactive({
   attachment: null,
   notes: '',
 })
+
+const contractBalance = ref(null)
+const contractBalanceLoading = ref(false)
+const canRefund = ref(false)
+const canSettle = ref(false)
+const isContractArchived = ref(false)
 
 const selectedFormTenantName = ref('')
 const selectedFilterTenantName = ref('')
@@ -618,11 +667,18 @@ async function handleFormTenantSelect(item) {
   selectedFormTenantName.value = fullName
   formData.tenantId = tenantId
   formData.contractId = ''
+  formData.transactionType = 'receipt'
+  formData.amount = ''
   formContracts.value = []
+  contractBalance.value = null
+  canRefund.value = false
+  canSettle.value = false
+  isContractArchived.value = false
   if (tenantId) {
     const list = await loadFormContractsForTenant(tenantId)
     if (list.length === 1) {
       formData.contractId = list[0].name
+      await loadContractSettlementInfo(list[0].name)
     }
   }
 }
@@ -641,8 +697,84 @@ async function handleFilterTenantSelect(item) {
   loadReceipts()
 }
 
-function handleContractChange(e) {
+async function handleContractChange(e) {
   formData.contractId = e.target.value
+  formData.transactionType = 'receipt'
+  formData.amount = ''
+  contractBalance.value = null
+  canRefund.value = false
+  canSettle.value = false
+  isContractArchived.value = false
+  if (formData.contractId) {
+    await loadContractSettlementInfo(formData.contractId)
+  }
+}
+
+async function loadContractSettlementInfo(contractId) {
+  contractBalanceLoading.value = true
+  try {
+    const res = await callApi('rental.rental.api.contract.get_contract_settlement_info', { name: contractId })
+    contractBalance.value = res.balance
+    canRefund.value = res.can_refund
+    canSettle.value = res.can_settle
+    isContractArchived.value = res.is_archived
+  } catch {
+    contractBalance.value = null
+    canRefund.value = false
+    canSettle.value = false
+    isContractArchived.value = false
+  } finally {
+    contractBalanceLoading.value = false
+  }
+}
+
+const contractBalanceLabel = computed(() => {
+  if (contractBalance.value === null) return ''
+  const abs = Math.abs(contractBalance.value)
+  const formatted = formatMoney(abs, currency.value)
+  if (contractBalance.value > 0) return `على المستأجر: ${formatted}`
+  if (contractBalance.value < 0) return `لصالح المستأجر: ${formatted}`
+  return `رصيد العقد: ${formatted}`
+})
+
+const showTransactionType = computed(() => {
+  if (!formData.contractId) return false
+  if (isContractArchived.value) return false
+  return canRefund.value
+})
+
+const canShowSettlement = computed(() => {
+  if (!canSettle.value) return false
+  if (contractBalance.value === null || contractBalance.value === 0) return false
+  if (contractBalance.value > 0) return true
+  if (contractBalance.value < 0 && canRefund.value) return true
+  return false
+})
+
+const amountError = computed(() => {
+  const amt = parseFloat(formData.amount)
+  if (!formData.amount || isNaN(amt)) return ''
+  if (amt <= 0) return 'المبلغ يجب أن يكون موجبًا'
+  if (formData.transactionType === 'refund' && contractBalance.value !== null) {
+    const credit = Math.abs(contractBalance.value)
+    if (amt > credit + 0.005) return 'مبلغ الرد لا يمكن أن يتجاوز الرصيد الدائن للعقد.'
+  }
+  return ''
+})
+
+function handleSettleBalance() {
+  if (contractBalance.value === null || contractBalance.value === 0) return
+  if (contractBalance.value > 0) {
+    formData.transactionType = 'receipt'
+    formData.amount = contractBalance.value.toFixed(2)
+  } else if (contractBalance.value < 0 && canRefund.value) {
+    formData.transactionType = 'refund'
+    formData.amount = Math.abs(contractBalance.value).toFixed(2)
+  }
+}
+
+function handleTransactionTypeChange() {
+  formData.amount = ''
 }
 
 function handleFilterContractChange(e) {
@@ -703,6 +835,7 @@ async function handleSubmit() {
     const payload = {
       tenant: formData.tenantId,
       contract: formData.contractId,
+      transaction_type: formData.transactionType,
       receipt_date: formData.receiptDate,
       amount: formData.amount,
       payment_method: formData.paymentMethod,
@@ -723,6 +856,7 @@ async function handleSubmit() {
     Object.assign(formData, {
       tenantId: '',
       contractId: '',
+      transactionType: 'receipt',
       receiptDate: new Date().toISOString().split('T')[0],
       amount: '',
       paymentMethod: 'cash',
@@ -734,6 +868,9 @@ async function handleSubmit() {
     })
     formContracts.value = []
     selectedFormTenantName.value = ''
+    contractBalance.value = null
+    canRefund.value = false
+    isContractArchived.value = false
     showForm.value = false
     filters.page = 1
     loadReceipts()

@@ -116,6 +116,7 @@ def get_tenants(
 		bal = get_tenant_balance(t["name"])
 		t["totalDues"] = bal["totalDues"]
 		t["totalReceipts"] = bal["totalReceipts"]
+		t["totalRefunds"] = bal["totalRefunds"]
 		t["balance"] = bal["balance"]
 		t["currentContractsCount"] = _count_contracts(t["name"], today=today)
 
@@ -468,6 +469,7 @@ def get_tenant_balance_api(name):
 		"tenantId": name,
 		"totalDues": bal["totalDues"],
 		"totalReceipts": bal["totalReceipts"],
+		"totalRefunds": bal["totalRefunds"],
 		"balance": bal["balance"],
 	}
 

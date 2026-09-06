@@ -53,15 +53,23 @@
     <div class="print-totals mt-8 border-t-2 border-navy-900 pt-6 text-sm">
       <div
         class="grid gap-4 text-right"
-        :class="showTotalAmount ? 'grid-cols-2' : 'grid-cols-1'"
+        :class="showTotalAmount ? 'grid-cols-4' : 'grid-cols-1'"
       >
         <div>
           <span class="font-bold text-navy-900">عدد السندات:</span>
           <span class="text-navy-900">{{ total }}</span>
         </div>
         <div v-if="showTotalAmount">
-          <span class="font-bold text-navy-900">إجمالي المبالغ (معتمدة):</span>
-          <span class="text-navy-900">{{ formatMoney(totalAmount, currency) }}</span>
+          <span class="font-bold text-navy-900">إجمالي المقبوضات:</span>
+          <span class="text-emerald-700">{{ formatMoney(totalReceipts, currency) }}</span>
+        </div>
+        <div v-if="showTotalAmount">
+          <span class="font-bold text-navy-900">إجمالي المبالغ المردودة:</span>
+          <span class="text-blue-700">{{ formatMoney(totalRefunds, currency) }}</span>
+        </div>
+        <div v-if="showTotalAmount">
+          <span class="font-bold text-navy-900">صافي التحصيل:</span>
+          <span class="text-navy-900">{{ formatMoney(totalReceipts - totalRefunds, currency) }}</span>
         </div>
       </div>
     </div>
@@ -90,6 +98,18 @@ const showTotalAmount = computed(() => {
   return props.appliedFilters?.statusValue !== 'draft' && props.appliedFilters?.statusValue !== 'cancelled'
 })
 
+const totalReceipts = computed(() => {
+  return props.receipts
+    .filter((r) => r.transaction_type !== 'refund' && (r.status === 'approved' || r.docstatus === 1))
+    .reduce((sum, r) => sum + Number(r.amount || 0), 0)
+})
+
+const totalRefunds = computed(() => {
+  return props.receipts
+    .filter((r) => r.transaction_type === 'refund' && (r.status === 'approved' || r.docstatus === 1))
+    .reduce((sum, r) => sum + Number(r.amount || 0), 0)
+})
+
 const filterSummary = computed(() => {
   const parts = []
   const f = props.appliedFilters || {}
@@ -111,6 +131,7 @@ const columns = computed(() => {
     { key: 'buildingUnit', label: 'العقار / الوحدة' },
     { key: 'contract', label: 'العقد' },
     { key: 'amount', label: 'المبلغ', always: true, nowrap: true, cellClass: 'font-medium' },
+    { key: 'transactionType', label: 'النوع', always: true },
     { key: 'paymentMethod', label: 'طريقة الدفع' },
     { key: 'status', label: 'الحالة' },
   ]
@@ -148,6 +169,8 @@ function getCellContent(key, r, index) {
       return r.contract_number || r.contract?.contract_number || r.contract?.contractNumber || '—'
     case 'amount':
       return formatMoney(r.amount, currency.value)
+    case 'transactionType':
+      return r.transaction_type === 'refund' ? 'رد للمستأجر' : 'قبض'
     case 'paymentMethod':
       return methodLabels[r.payment_method || r.paymentMethod] || r.payment_method || r.paymentMethod
     case 'status': {

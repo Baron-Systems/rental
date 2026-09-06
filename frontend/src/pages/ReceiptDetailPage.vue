@@ -23,9 +23,10 @@
           </div>
           <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h1 class="text-2xl font-bold tracking-tight text-navy-900">سند قبض {{ receipt.receipt_number || 'مسودة' }}</h1>
+              <h1 class="text-2xl font-bold tracking-tight text-navy-900">{{ receiptTitle }} {{ receipt.receipt_number || 'مسودة' }}</h1>
               <div class="mt-2 flex flex-wrap items-center gap-3">
                 <StatusBadge :status="receipt.status" />
+                <span class="text-sm font-medium" :class="isRefund ? 'text-blue-600' : 'text-navy-400'">{{ transactionTypeLabel }}</span>
                 <span class="text-sm text-navy-400">{{ formatMoney(receipt.amount, currency) }}</span>
                 <span v-if="receipt.status === 'cancelled' && receipt.cancellation_reason" class="text-sm text-red-600">
                   سبب الإلغاء: {{ receipt.cancellation_reason }}
@@ -196,6 +197,10 @@ const { confirm, prompt } = useConfirm()
 const currency = computed(() => session.state.account?.settings?.currency || 'ILS')
 const lessorData = computed(() => session.state.account?.settings || null)
 
+const isRefund = computed(() => receipt.value?.transaction_type === 'refund')
+const receiptTitle = computed(() => isRefund.value ? 'سند صرف' : 'سند قبض')
+const transactionTypeLabel = computed(() => isRefund.value ? 'رد للمستأجر' : 'قبض من المستأجر')
+
 const paymentMethodOptions = [
   { value: 'cash', label: 'نقداً' },
   { value: 'cheque', label: 'شيك' },
@@ -237,7 +242,8 @@ const infoItems = computed(() => {
     { label: 'العقار', value: r.building_name || r.building || '—', icon: icons.building },
     { label: 'الوحدة', value: r.unit_number || r.unit || '—', icon: icons.home },
     { label: 'العقد', value: r.contract_number || r.contract || '—', icon: icons.file, link: r.contract ? `/contracts/${r.contract}` : undefined },
-    { label: 'تاريخ القبض', value: formatDate(r.receipt_date), icon: icons.calendar },
+    { label: 'نوع الحركة', value: transactionTypeLabel.value, icon: icons.banknote },
+    { label: isRefund.value ? 'تاريخ الصرف' : 'تاريخ القبض', value: formatDate(r.receipt_date), icon: icons.calendar },
     { label: 'المبلغ', value: formatMoney(r.amount, currency.value), icon: icons.banknote },
     { label: 'طريقة الدفع', value: paymentMethodOptions.find((o) => o.value === r.payment_method)?.label || r.payment_method, icon: icons.banknote },
   ]
@@ -270,7 +276,7 @@ async function fetchReceipt() {
     const res = await callApi('rental.rental.api.receipt.get_receipt', { name: route.params.id })
     receipt.value = res
   } catch (err) {
-    toast.error(extractError(err) || 'حدث خطأ أثناء تحميل بيانات سند القبض')
+    toast.error(extractError(err) || 'حدث خطأ أثناء تحميل بيانات السند')
   } finally {
     loading.value = false
   }
@@ -278,8 +284,10 @@ async function fetchReceipt() {
 
 async function handleDelete() {
   const confirmed = await confirm({
-    title: 'حذف سند القبض',
-    message: 'سيتم حذف مسودة سند القبض نهائيًا. لا يمكن التراجع عن هذا الإجراء.',
+    title: isRefund.value ? 'حذف سند الصرف' : 'حذف سند القبض',
+    message: isRefund.value
+      ? 'سيتم حذف مسودة سند الصرف نهائيًا. لا يمكن التراجع عن هذا الإجراء.'
+      : 'سيتم حذف مسودة سند القبض نهائيًا. لا يمكن التراجع عن هذا الإجراء.',
     variant: 'danger',
     confirmLabel: 'حذف',
   })
@@ -288,7 +296,7 @@ async function handleDelete() {
     await callApi('rental.rental.api.receipt.delete_receipt', { name: receipt.value.name })
     router.push({ name: 'Receipts' })
   } catch (err) {
-    toast.error(extractError(err) || 'حدث خطأ أثناء حذف سند القبض')
+    toast.error(extractError(err) || 'حدث خطأ أثناء حذف السند')
   }
 }
 
@@ -298,14 +306,16 @@ async function handleApprove() {
     receipt.value = res
     editMode.value = false
   } catch (err) {
-    toast.error(extractError(err) || 'حدث خطأ أثناء اعتماد سند القبض')
+    toast.error(extractError(err) || 'حدث خطأ أثناء اعتماد السند')
   }
 }
 
 async function handleCancel() {
   const reason = await prompt({
-    title: 'إلغاء سند القبض',
-    message: 'أدخل سبب إلغاء سند القبض',
+    title: isRefund.value ? 'إلغاء سند الصرف' : 'إلغاء سند القبض',
+    message: isRefund.value
+      ? 'أدخل سبب إلغاء سند الصرف'
+      : 'أدخل سبب إلغاء سند القبض',
     inputLabel: 'سبب الإلغاء',
     variant: 'warning',
   })
@@ -314,7 +324,7 @@ async function handleCancel() {
     const res = await callApi('rental.rental.api.receipt.cancel_receipt', { name: receipt.value.name, reason })
     receipt.value = res
   } catch (err) {
-    toast.error(extractError(err) || 'حدث خطأ أثناء إلغاء سند القبض')
+    toast.error(extractError(err) || 'حدث خطأ أثناء إلغاء السند')
   }
 }
 

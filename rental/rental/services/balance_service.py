@@ -77,19 +77,36 @@ def get_effective_due_total(filters: dict | None = None) -> float:
 
 
 def get_approved_receipt_total(filters: dict | None = None) -> float:
-	"""Sum of approved (submitted) receipts.
+	"""Sum of approved (submitted) receipts (transaction_type = 'receipt').
 
 	Source: ``getApprovedReceiptTotal``.
 
 	**No ``receiptDate`` filter is applied** — all approved receipts are
 	counted regardless of date. This is intentional and matches the source
 	of truth (INV-TEN-018).
+
+	Refunds (transaction_type = 'refund') are excluded — use
+	``get_approved_refund_total`` for refunds.
 	"""
-	receipt_filters = {"docstatus": 1}
+	receipt_filters = {"docstatus": 1, "transaction_type": "receipt"}
 	if filters:
 		receipt_filters.update(filters)
 
 	total = _db_sum("Rental Receipt", receipt_filters, "amount")
+	return round_money(float(total))
+
+
+def get_approved_refund_total(filters: dict | None = None) -> float:
+	"""Sum of approved (submitted) refunds (transaction_type = 'refund').
+
+	Refunds represent money returned to the tenant and increase the
+	contract balance (opposite of receipts).
+	"""
+	refund_filters = {"docstatus": 1, "transaction_type": "refund"}
+	if filters:
+		refund_filters.update(filters)
+
+	total = _db_sum("Rental Receipt", refund_filters, "amount")
 	return round_money(float(total))
 
 
@@ -99,20 +116,23 @@ def get_approved_receipt_total(filters: dict | None = None) -> float:
 
 
 def get_tenant_balance(tenant_name: str) -> dict:
-	"""Return {totalDues, totalReceipts, balance} for a tenant.
+	"""Return {totalDues, totalReceipts, totalRefunds, balance} for a tenant.
 
 	Source: ``getTenantBalance``.
 	- totalDues = effective approved dues with dueDate <= today (minus waivers)
-	- totalReceipts = all approved receipts (no receiptDate filter)
-	- balance = totalDues - totalReceipts
+	- totalReceipts = all approved receipts (transaction_type='receipt')
+	- totalRefunds = all approved refunds (transaction_type='refund')
+	- balance = totalDues - totalReceipts + totalRefunds
 	"""
 	total_dues = get_effective_due_total({"tenant": tenant_name})
 	total_receipts = get_approved_receipt_total({"tenant": tenant_name})
+	total_refunds = get_approved_refund_total({"tenant": tenant_name})
 	return {
 		"tenant": tenant_name,
 		"totalDues": total_dues,
 		"totalReceipts": total_receipts,
-		"balance": round_money(total_dues - total_receipts),
+		"totalRefunds": total_refunds,
+		"balance": round_money(total_dues - total_receipts + total_refunds),
 	}
 
 
@@ -122,14 +142,19 @@ def get_tenant_balance(tenant_name: str) -> dict:
 
 
 def get_contract_balance(contract_name: str) -> dict:
-	"""Return balance for a contract."""
+	"""Return balance for a contract.
+
+	balance = totalDues - totalReceipts + totalRefunds
+	"""
 	total_dues = get_effective_due_total({"contract": contract_name})
 	total_receipts = get_approved_receipt_total({"contract": contract_name})
+	total_refunds = get_approved_refund_total({"contract": contract_name})
 	return {
 		"contract": contract_name,
 		"totalDues": total_dues,
 		"totalReceipts": total_receipts,
-		"balance": round_money(total_dues - total_receipts),
+		"totalRefunds": total_refunds,
+		"balance": round_money(total_dues - total_receipts + total_refunds),
 	}
 
 
@@ -142,10 +167,12 @@ def get_building_balance(building_name: str) -> dict:
 	"""Return balance for a building."""
 	total_dues = get_effective_due_total({"building": building_name})
 	total_receipts = get_approved_receipt_total({"building": building_name})
+	total_refunds = get_approved_refund_total({"building": building_name})
 	return {
 		"totalDues": total_dues,
 		"totalReceipts": total_receipts,
-		"balance": round_money(total_dues - total_receipts),
+		"totalRefunds": total_refunds,
+		"balance": round_money(total_dues - total_receipts + total_refunds),
 	}
 
 
@@ -195,13 +222,25 @@ def get_tenant_balance_stats(where: dict | None = None) -> dict:
 		"""
 		SELECT tenant, SUM(amount) as total
 		FROM `tabRental Receipt`
-		WHERE docstatus = 1 AND tenant IN %s
+		WHERE docstatus = 1 AND transaction_type = 'receipt' AND tenant IN %s
 		GROUP BY tenant
 		""",
 		(tenant_names,),
 		as_dict=True,
 	)
 	receipts_map = {r["tenant"]: float(r["total"] or 0) for r in receipts_by_tenant}
+
+	refunds_by_tenant = frappe.db.sql(
+		"""
+		SELECT tenant, SUM(amount) as total
+		FROM `tabRental Receipt`
+		WHERE docstatus = 1 AND transaction_type = 'refund' AND tenant IN %s
+		GROUP BY tenant
+		""",
+		(tenant_names,),
+		as_dict=True,
+	)
+	refunds_map = {r["tenant"]: float(r["total"] or 0) for r in refunds_by_tenant}
 
 	waivers_by_tenant = frappe.db.sql(
 		"""
@@ -219,7 +258,8 @@ def get_tenant_balance_stats(where: dict | None = None) -> dict:
 	for t in tenants:
 		total_dues = dues_map.get(t, 0) - waivers_map.get(t, 0)
 		total_receipts = receipts_map.get(t, 0)
-		balance = total_dues - total_receipts
+		total_refunds = refunds_map.get(t, 0)
+		balance = total_dues - total_receipts + total_refunds
 		if balance > 0:
 			with_debt += 1
 		elif balance < 0:
@@ -276,11 +316,12 @@ def get_tenant_balances(tenant_names: list[str]) -> dict:
 	for d in dues:
 		dues_map[d.tenant] = dues_map.get(d.tenant, 0) + float(d.amount or 0)
 
-	# Bulk receipts
+	# Bulk receipts (transaction_type='receipt' only)
 	receipts = frappe.get_all(
 		"Rental Receipt",
 		filters={
 			"docstatus": 1,
+			"transaction_type": "receipt",
 			"tenant": ["in", tenant_names],
 		},
 		fields=["tenant", "amount"],
@@ -288,6 +329,20 @@ def get_tenant_balances(tenant_names: list[str]) -> dict:
 	receipts_map = {}
 	for r in receipts:
 		receipts_map[r.tenant] = receipts_map.get(r.tenant, 0) + float(r.amount or 0)
+
+	# Bulk refunds (transaction_type='refund')
+	refunds = frappe.get_all(
+		"Rental Receipt",
+		filters={
+			"docstatus": 1,
+			"transaction_type": "refund",
+			"tenant": ["in", tenant_names],
+		},
+		fields=["tenant", "amount"],
+	)
+	refunds_map = {}
+	for r in refunds:
+		refunds_map[r.tenant] = refunds_map.get(r.tenant, 0) + float(r.amount or 0)
 
 	# Bulk waivers (via due names)
 	due_names = [d.name for d in frappe.get_all(
@@ -317,11 +372,13 @@ def get_tenant_balances(tenant_names: list[str]) -> dict:
 	for tenant_name in tenant_names:
 		total_dues = round_money(dues_map.get(tenant_name, 0) - waivers_map.get(tenant_name, 0))
 		total_receipts = round_money(receipts_map.get(tenant_name, 0))
+		total_refunds = round_money(refunds_map.get(tenant_name, 0))
 		result[tenant_name] = {
 			"tenant": tenant_name,
 			"totalDues": total_dues,
 			"totalReceipts": total_receipts,
-			"balance": round_money(total_dues - total_receipts),
+			"totalRefunds": total_refunds,
+			"balance": round_money(total_dues - total_receipts + total_refunds),
 		}
 
 	return result
@@ -358,6 +415,7 @@ def get_contract_balances(contract_names: list[str]) -> dict:
 		"Rental Receipt",
 		filters={
 			"docstatus": 1,
+			"transaction_type": "receipt",
 			"contract": ["in", contract_names],
 		},
 		fields=["contract", "amount"],
@@ -366,6 +424,21 @@ def get_contract_balances(contract_names: list[str]) -> dict:
 	for r in receipts:
 		if r.contract:
 			receipts_map[r.contract] = receipts_map.get(r.contract, 0) + float(r.amount or 0)
+
+	# Bulk refunds (transaction_type='refund')
+	refunds = frappe.get_all(
+		"Rental Receipt",
+		filters={
+			"docstatus": 1,
+			"transaction_type": "refund",
+			"contract": ["in", contract_names],
+		},
+		fields=["contract", "amount"],
+	)
+	refunds_map = {}
+	for r in refunds:
+		if r.contract:
+			refunds_map[r.contract] = refunds_map.get(r.contract, 0) + float(r.amount or 0)
 
 	# Bulk waivers
 	all_due_names = [n for names in due_names_by_contract.values() for n in names]
@@ -388,11 +461,13 @@ def get_contract_balances(contract_names: list[str]) -> dict:
 	for contract_name in contract_names:
 		total_dues = round_money(dues_map.get(contract_name, 0) - waivers_map.get(contract_name, 0))
 		total_receipts = round_money(receipts_map.get(contract_name, 0))
+		total_refunds = round_money(refunds_map.get(contract_name, 0))
 		result[contract_name] = {
 			"contract": contract_name,
 			"totalDues": total_dues,
 			"totalReceipts": total_receipts,
-			"balance": round_money(total_dues - total_receipts),
+			"totalRefunds": total_refunds,
+			"balance": round_money(total_dues - total_receipts + total_refunds),
 		}
 
 	return result
@@ -430,6 +505,7 @@ def get_building_balances(building_names: list[str]) -> dict:
 		"Rental Receipt",
 		filters={
 			"docstatus": 1,
+			"transaction_type": "receipt",
 			"building": ["in", building_names],
 		},
 		fields=["building", "amount"],
@@ -438,6 +514,21 @@ def get_building_balances(building_names: list[str]) -> dict:
 	for r in receipts:
 		if r.building:
 			receipts_map[r.building] = receipts_map.get(r.building, 0) + float(r.amount or 0)
+
+	# Bulk refunds (transaction_type='refund')
+	refunds = frappe.get_all(
+		"Rental Receipt",
+		filters={
+			"docstatus": 1,
+			"transaction_type": "refund",
+			"building": ["in", building_names],
+		},
+		fields=["building", "amount"],
+	)
+	refunds_map = {}
+	for r in refunds:
+		if r.building:
+			refunds_map[r.building] = refunds_map.get(r.building, 0) + float(r.amount or 0)
 
 	# Bulk waivers
 	all_due_names = [n for names in due_names_by_building.values() for n in names]
@@ -460,11 +551,13 @@ def get_building_balances(building_names: list[str]) -> dict:
 	for building_name in building_names:
 		total_dues = round_money(dues_map.get(building_name, 0) - waivers_map.get(building_name, 0))
 		total_receipts = round_money(receipts_map.get(building_name, 0))
+		total_refunds = round_money(refunds_map.get(building_name, 0))
 		result[building_name] = {
 			"building": building_name,
 			"totalDues": total_dues,
 			"totalReceipts": total_receipts,
-			"balance": round_money(total_dues - total_receipts),
+			"totalRefunds": total_refunds,
+			"balance": round_money(total_dues - total_receipts + total_refunds),
 		}
 
 	return result

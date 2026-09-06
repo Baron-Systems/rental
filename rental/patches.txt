@@ -12,3 +12,4 @@ rental.rental.patches.v1_convert_unit_type_to_link
 rental.rental.patches.v1_migrate_rooms_bathrooms
 rental.rental.patches.v1_migrate_meter_capabilities
 rental.rental.patches.v1_cleanup_deprecated_system_attributes
+rental.rental.patches.v1_set_transaction_type_on_receipts

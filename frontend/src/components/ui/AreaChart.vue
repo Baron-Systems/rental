@@ -8,7 +8,7 @@
       </div>
       <div class="flex items-center gap-1.5">
         <span class="inline-block h-2.5 w-2.5 rounded-full" :style="{ background: colors.receipts }"></span>
-        <span>التحصيلات</span>
+        <span>صافي التحصيل</span>
       </div>
     </div>
 
@@ -58,6 +58,19 @@
         >{{ yt.label }}</text>
       </g>
 
+      <!-- Zero line (only when negative values exist) -->
+      <line
+        v-if="minVal < 0"
+        :x1="padL"
+        :x2="vbW - padR"
+        :y1="yAt(0)"
+        :y2="yAt(0)"
+        :stroke="colors.graphite"
+        stroke-width="1"
+        stroke-dasharray="2 2"
+        opacity="0.4"
+      />
+
       <!-- Dues area + line -->
       <path :d="duesAreaPath" :fill="`url(#${duesGradId})`" stroke="none" />
       <path :d="duesLinePath" fill="none" :stroke="colors.dues" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
@@ -101,7 +114,7 @@
     >
       <p class="text-xs font-medium text-navy-400 mb-1">{{ data[hoverIdx].name }}</p>
       <p class="text-sm font-semibold text-navy-900">المستحقات: {{ formatMoney(data[hoverIdx].dues, currency) }}</p>
-      <p class="text-sm font-semibold text-navy-900">التحصيلات: {{ formatMoney(data[hoverIdx].receipts, currency) }}</p>
+      <p class="text-sm font-semibold text-navy-900">صافي التحصيل: {{ formatMoney(data[hoverIdx].receipts, currency) }}</p>
     </div>
   </div>
 </template>
@@ -133,11 +146,23 @@ const padB = 36
 
 const maxVal = computed(() => {
   const all = props.data.flatMap(d => [d.dues, d.receipts])
-  const m = Math.max(...all, 1)
+  const m = Math.max(...all, 0)
   // round up to nice number
+  if (m === 0) return 1
   const pow = Math.pow(10, String(Math.floor(m)).length - 1)
   return Math.ceil(m / pow) * pow
 })
+
+const minVal = computed(() => {
+  const all = props.data.flatMap(d => [d.dues, d.receipts])
+  const m = Math.min(...all, 0)
+  if (m >= 0) return 0
+  const absM = Math.abs(m)
+  const pow = Math.pow(10, String(Math.floor(absM)).length - 1)
+  return -Math.ceil(absM / pow) * pow
+})
+
+const valRange = computed(() => maxVal.value - minVal.value || 1)
 
 const xAt = (i) => {
   const n = props.data.length
@@ -147,7 +172,8 @@ const xAt = (i) => {
 
 const yAt = (val) => {
   const h = vbH - padT - padB
-  return padT + h - (val / maxVal.value) * h
+  const frac = (val - minVal.value) / valRange.value
+  return padT + h - frac * h
 }
 
 const linePath = (key) => {
@@ -155,7 +181,7 @@ const linePath = (key) => {
 }
 
 const areaPath = (key) => {
-  const base = vbH - padB
+  const base = yAt(0)
   const top = props.data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i)} ${yAt(d[key])}`).join(' ')
   const last = xAt(props.data.length - 1)
   const first = xAt(0)
@@ -175,7 +201,7 @@ const gridYs = computed(() => {
 const yTicks = computed(() => {
   return gridYs.value.map((gy, i) => {
     const frac = 1 - (i / 4)
-    return { y: gy, label: Math.round(maxVal.value * frac) }
+    return { y: gy, label: Math.round(minVal.value + valRange.value * frac) }
   })
 })
 

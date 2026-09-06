@@ -136,19 +136,20 @@ def build_statement_lines(dues: list, receipts: list, waivers: list, due_type_na
 		})
 
 	for r in receipts:
+		is_refund = r.get("transaction_type") == "refund"
 		entries.append({
-			"type": "receipt",
+			"type": "refund" if is_refund else "receipt",
 			"id": r["name"],
 			"date": to_calendar_day(r.get("receipt_date")),
-			"debit": 0,
-			"credit": float(r["amount"]),
-			"description": "دفعة من المستأجر",
+			"debit": float(r["amount"]) if is_refund else 0,
+			"credit": 0 if is_refund else float(r["amount"]),
+			"description": "\u0631\u062f \u0645\u0628\u0644\u063a \u0644\u0644\u0645\u0633\u062a\u0623\u062c\u0631" if is_refund else "\u062f\u0641\u0639\u0629 \u0645\u0646 \u0627\u0644\u0645\u0633\u062a\u0623\u062c\u0631",
 			"reference": r.get("receipt_number") or "",
 			"contract": r.get("contract"),
 			"contractNumber": _contract_number(r.get("contract")),
 			"building": _building_name(r.get("building")),
 			"unit": _unit_number(r.get("unit")),
-			"typeName": "سند قبض",
+			"typeName": "\u0633\u0646\u062f \u0635\u0631\u0641" if is_refund else "\u0633\u0646\u062f \u0642\u0628\u0636",
 			"due_type": None,
 			"creation": r.get("creation"),
 		})
@@ -250,7 +251,7 @@ def get_tenant_statement(
 		filters=receipt_filters,
 		fields=[
 			"name", "receipt_number", "receipt_date", "amount",
-			"payment_method", "contract", "building", "unit", "notes", "creation",
+			"transaction_type", "payment_method", "contract", "building", "unit", "notes", "creation",
 		],
 	)
 

@@ -47,7 +47,7 @@
 
       <template v-else>
         <!-- KPI Cards — single strip, lighter dividers, strong values -->
-        <div class="grid grid-cols-1 gap-px sm:grid-cols-2 lg:grid-cols-4 rounded-[14px] border border-ivory-300 bg-white overflow-hidden">
+        <div class="grid grid-cols-1 gap-px sm:grid-cols-2 lg:grid-cols-3 rounded-[14px] border border-ivory-300 bg-white overflow-hidden">
           <div
             v-for="(card, i) in kpiCards"
             :key="card.label"
@@ -106,7 +106,7 @@
               <div class="flex-1 min-w-0">
                 <h2 class="text-base font-semibold text-navy-900">التدفقات المالية</h2>
                 <p class="mt-1 text-sm text-navy-400">
-                  المستحقات مقابل التحصيلات (آخر 6 أشهر)
+                  المستحقات مقابل صافي التحصيل (آخر 6 أشهر)
                   <span v-if="trendCurrency" class="text-navy-300"> · {{ trendCurrency }}</span>
                 </p>
               </div>
@@ -172,8 +172,8 @@
               <p class="text-lg font-bold text-navy-900">{{ formatMoney(stats.totalDues, currency) }}</p>
             </div>
             <div class="text-center">
-              <p class="text-xs text-navy-400 mb-1">المحصل</p>
-              <p class="text-lg font-bold text-emerald-600">{{ formatMoney(stats.totalReceipts, currency) }}</p>
+              <p class="text-xs text-navy-400 mb-1">صافي التحصيل</p>
+              <p class="text-lg font-bold text-emerald-600">{{ formatMoney(stats.netCollections, currency) }}</p>
             </div>
             <div class="text-left">
               <p class="text-xs text-navy-400 mb-1">المتبقي</p>
@@ -255,13 +255,31 @@ const kpiCards = computed(() => [
     trendLabel: 'حتى اليوم',
   },
   {
-    label: 'إجمالي التحصيلات',
+    label: 'إجمالي المقبوضات',
     value: formatMoney(stats.value?.totalReceipts ?? 0, currency.value),
     icon: IconBanknote,
     href: '/receipts',
     iconClass: 'text-emerald-600',
     trend: 'up',
-    trendLabel: 'حتى اليوم',
+    trendLabel: 'Gross Receipts',
+  },
+  {
+    label: 'المبالغ المردودة',
+    value: formatMoney(stats.value?.totalRefunds ?? 0, currency.value),
+    icon: IconBanknote,
+    href: '/receipts',
+    iconClass: 'text-blue-600',
+    trend: 'neutral',
+    trendLabel: 'Refunds',
+  },
+  {
+    label: 'صافي التحصيل',
+    value: formatMoney(stats.value?.netCollections ?? 0, currency.value),
+    icon: IconBanknote,
+    href: '/receipts',
+    iconClass: 'text-emerald-600',
+    trend: 'up',
+    trendLabel: 'المقبوضات − المردودات',
   },
   {
     label: 'الرصيد المستحق',
@@ -317,8 +335,8 @@ const showAccountSelector = computed(() =>
 // ---- Collection performance ----
 const collectionRate = computed(() => {
   const dues = stats.value?.totalDues ?? 0
-  const receipts = stats.value?.totalReceipts ?? 0
-  return dues > 0 ? Math.round((receipts / dues) * 100) : 0
+  const netCollections = stats.value?.netCollections ?? 0
+  return dues > 0 ? Math.round((netCollections / dues) * 100) : 0
 })
 
 // ---- Data fetching ----
@@ -361,7 +379,7 @@ async function fetchTrend() {
     trendData.value = (res?.months ?? []).map(m => ({
       name: m.name,
       dues: m.dues,
-      receipts: m.receipts,
+      receipts: m.netCollections,
     }))
     trendCurrency.value = res?.currency ?? ''
   } catch (e) {

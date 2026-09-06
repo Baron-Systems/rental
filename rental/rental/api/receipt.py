@@ -115,7 +115,7 @@ def get_receipts(
 
 	fields = [
 		"name", "receipt_number", "tenant", "contract", "building", "unit",
-		"receipt_date", "amount", "payment_method", "reference_number",
+		"receipt_date", "amount", "transaction_type", "payment_method", "reference_number",
 		"cheque_date", "bank_name", "attachment", "docstatus", "notes",
 		"cancellation_reason", "cancelled_by", "cancelled_at",
 	]
@@ -154,6 +154,7 @@ def get_receipts(
 			float(r.get("amount") or 0)
 			for r in receipts
 			if r["docstatus"] == 1  # approved only
+			and r.get("transaction_type") != "refund"  # exclude refunds from total
 		)
 		result["print"] = {"total": print_total, "totalAmount": round(print_total_amount, 2)}
 
@@ -211,7 +212,11 @@ def create_receipt(**kwargs):
 		frappe.throw(frappe._("طريقة الدفع غير صالحة"))
 
 	# Archive protection — blocks creating receipts for archived contracts.
-	ensure_contract_not_archived(kwargs.get("contract"), action="إنشاء سند قبض")
+	ensure_contract_not_archived(kwargs.get("contract"), action="إنشاء سند")
+
+	transaction_type = kwargs.get("transaction_type") or "receipt"
+	if transaction_type not in ("receipt", "refund"):
+		frappe.throw(frappe._("نوع الحركة غير صالح"))
 
 	receipt_data = {
 		"doctype": "Rental Receipt",
@@ -220,6 +225,7 @@ def create_receipt(**kwargs):
 		"contract": kwargs.get("contract"),
 		"receipt_date": kwargs.get("receipt_date"),
 		"amount": kwargs.get("amount"),
+		"transaction_type": transaction_type,
 		"payment_method": payment_method,
 		"reference_number": kwargs.get("reference_number"),
 		"cheque_date": kwargs.get("cheque_date"),
@@ -251,13 +257,13 @@ def update_receipt(name, **kwargs):
 		frappe.throw(frappe._("لا يمكن تعديل إلا مسودات سند القبض"))
 
 	# Forbidden identity keys — reject, do not silently drop (source: route.ts:34-37)
-	forbidden = ["tenant", "contract", "building", "unit", "rental_account", "receipt_number"]
+	forbidden = ["tenant", "contract", "building", "unit", "rental_account", "receipt_number", "transaction_type"]
 	for f in forbidden:
 		if f in kwargs:
 			frappe.throw(frappe._("لا يمكن تغيير بيانات هوية السند"))
 
 	# Archive protection — blocks editing receipts of archived contracts.
-	ensure_contract_not_archived(receipt.contract, action="تعديل سند قبض")
+	ensure_contract_not_archived(receipt.contract, action="تعديل سند")
 
 	# Determine effective payment method (source: route.ts:52)
 	payment_method = kwargs.get("payment_method")
@@ -324,7 +330,7 @@ def delete_receipt(name):
 		frappe.throw(frappe._("لا يمكن حذف إلا مسودات سند القبض"))
 
 	# Archive protection — blocks deleting receipts of archived contracts.
-	ensure_contract_not_archived(receipt.contract, action="حذف سند قبض")
+	ensure_contract_not_archived(receipt.contract, action="حذف سند")
 
 	frappe.delete_doc("Rental Receipt", name, ignore_permissions=is_system_manager())
 	return {"success": True}
@@ -348,11 +354,14 @@ def approve_receipt(name):
 		frappe.throw(frappe._("يمكن اعتماد المسودات فقط"))
 
 	# Archive protection — blocks approving receipts of archived contracts.
-	ensure_contract_not_archived(receipt.contract, action="اعتماد سند قبض")
+	ensure_contract_not_archived(receipt.contract, action="اعتماد سند")
 
 	# Validate amount (source: route.ts:53-55)
 	if not receipt.amount or float(receipt.amount) <= 0:
 		frappe.throw(frappe._("المبلغ يجب أن يكون أكبر من صفر"))
+
+	# Refund revalidation is handled by on_submit hook in rental_receipt.py,
+	# which checks the current contract balance at approval time.
 
 	# Validate receiptDate (source: route.ts:57-59)
 	if not receipt.receipt_date:
@@ -389,7 +398,7 @@ def cancel_receipt(name, reason):
 		frappe.throw(frappe._("يمكن إلغاء السندات المعتمدة فقط"))
 
 	# Archive protection — blocks cancelling receipts of archived contracts.
-	ensure_contract_not_archived(receipt.contract, action="إلغاء سند قبض")
+	ensure_contract_not_archived(receipt.contract, action="إلغاء سند")
 
 	# Validate reason (source: cancellationSchema, validation.ts:322-324)
 	# z.string().min(1) rejects empty/None but accepts non-empty strings incl. whitespace
