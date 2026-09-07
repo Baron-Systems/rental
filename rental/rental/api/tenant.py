@@ -359,7 +359,7 @@ def get_tenant(name):
 	from rental.rental.services.statement_service import get_tenant_statement
 
 	result["balance"] = get_tenant_balance(name)
-	result["statement"] = get_tenant_statement(name)
+	result["statement"] = get_tenant_statement(name, page=1)
 
 	return result
 

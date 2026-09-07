@@ -54,11 +54,10 @@
           </DataTable>
 
           <!-- Pagination -->
-          <div v-if="statement?.pagination && statement.pagination.totalPages > 1" class="flex items-center justify-center gap-3 px-4 py-3 border-t border-ivory-300/60 text-sm">
-            <button class="btn-premium btn-ghost px-2 py-1" :disabled="statement.pagination.page <= 1" @click="fetchStatement(statement.pagination.page - 1)">السابق</button>
-            <span class="text-navy-500">صفحة {{ statement.pagination.page }} من {{ statement.pagination.totalPages }}</span>
-            <button class="btn-premium btn-ghost px-2 py-1" :disabled="statement.pagination.page >= statement.pagination.totalPages" @click="fetchStatement(statement.pagination.page + 1)">التالي</button>
+          <div v-if="statement?.pagination" class="border-t border-ivory-300/60 px-4 py-3 text-xs text-navy-400 flex items-center justify-between">
+            <span>إجمالي: {{ statement.pagination.total }} حركة</span>
           </div>
+          <Pagination v-if="statement?.pagination" :page="statement.pagination.page" :page-size="statement.pagination.pageSize" :total="statement.pagination.total" @change="onPageChange" />
         </Card>
       </div>
     </div>
@@ -75,6 +74,7 @@ import StatCard from '@/components/ui/StatCard.vue'
 import DataTable from '@/components/ui/DataTable.vue'
 import TableRow from '@/components/ui/TableRow.vue'
 import TableCell from '@/components/ui/TableCell.vue'
+import Pagination from '@/components/ui/Pagination.vue'
 import { callApi, formatMoney, formatDate, extractError } from '@/composables/useApi'
 import { useSession } from '@/composables/useSession'
 import { useToast } from '@/composables/useToast'
@@ -152,6 +152,10 @@ async function fetchStatement(page = 1) {
 
 function handleContractFilterChange() {
   fetchStatement(1)
+}
+
+function onPageChange(page) {
+  fetchStatement(page)
 }
 
 async function handlePrint() {
