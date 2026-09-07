@@ -47,21 +47,22 @@
 
         <!-- Statement Section -->
         <Card padding="none">
-          <template #title>
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-4 border-b border-ivory-300/60">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-b border-ivory-300/60">
+            <div class="flex items-center gap-2">
+              <span class="w-[3px] self-stretch rounded-full bg-gradient-to-b from-gold-400 to-gold-600"></span>
               <div>
                 <h2 class="font-bold text-navy-800">كشف الحساب</h2>
                 <span class="text-xs text-navy-400">{{ statement?.lines?.length || 0 }} حركة</span>
               </div>
-              <div class="flex items-center gap-2">
-                <label class="text-xs text-navy-400">العقد</label>
-                <select v-model="statementFilter.contractId" class="input-premium text-sm" :disabled="!tenant.contracts?.length" @change="handleContractFilterChange">
-                  <option value="">كل العقود</option>
-                  <option v-for="c in tenant.contracts" :key="c.name" :value="c.name">{{ contractLabel(c) }}</option>
-                </select>
-              </div>
             </div>
-          </template>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-navy-400">العقد</label>
+              <select v-model="statementFilter.contractId" class="input-premium text-sm" :disabled="!tenant.contracts?.length" @change="handleContractFilterChange">
+                <option value="">كل العقود</option>
+                <option v-for="c in tenant.contracts" :key="c.name" :value="c.name">{{ contractLabel(c) }}</option>
+              </select>
+            </div>
+          </div>
 
           <div v-if="statementLoading" class="text-center py-12 text-navy-400 text-sm">جاري تحميل كشف الحساب...</div>
           <div v-else-if="!statement?.lines?.length" class="text-center py-12">
