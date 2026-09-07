@@ -104,7 +104,11 @@
               </span>
             </template>
             <template v-else>
-              <span class="text-sm font-medium text-navy-900">{{ currentLabel }}</span>
+              <span class="flex items-center gap-1.5">
+                <router-link to="/" class="text-navy-400 hover:text-navy-900">الرئيسية</router-link>
+                <svg class="h-3 w-3 text-ivory-300/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                <span class="font-medium text-navy-900">{{ currentLabel }}</span>
+              </span>
             </template>
           </div>
         </div>
