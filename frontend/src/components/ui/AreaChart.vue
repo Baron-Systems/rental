@@ -13,6 +13,7 @@
     </div>
 
     <svg
+      v-if="!allZero"
       ref="svgRef"
       :viewBox="`0 0 ${vbW} ${vbH}`"
       class="w-full"
@@ -71,11 +72,11 @@
         opacity="0.4"
       />
 
-      <!-- Dues area + line -->
+      <!-- Dues area + line (navy, unified 3px) -->
       <path :d="duesAreaPath" :fill="`url(#${duesGradId})`" stroke="none" />
       <path :d="duesLinePath" fill="none" :stroke="colors.dues" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
 
-      <!-- Receipts area + line -->
+      <!-- Receipts area + line (green, unified 3px) -->
       <path :d="receiptsAreaPath" :fill="`url(#${receiptsGradId})`" stroke="none" />
       <path :d="receiptsLinePath" fill="none" :stroke="colors.receipts" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />
 
@@ -105,6 +106,15 @@
         <circle :cx="xAt(hoverIdx)" :cy="yAt(data[hoverIdx].receipts)" r="4" :fill="colors.receipts" />
       </g>
     </svg>
+
+    <!-- Empty state when all values are zero -->
+    <div
+      v-else
+      class="flex items-center justify-center text-sm text-navy-400"
+      style="height: 260px;"
+    >
+      لا توجد حركة مالية خلال هذه الفترة
+    </div>
 
     <!-- Tooltip (matches original ChartTooltip style) -->
     <div
@@ -164,6 +174,11 @@ const minVal = computed(() => {
 
 const valRange = computed(() => maxVal.value - minVal.value || 1)
 
+const allZero = computed(() => {
+  if (!props.data.length) return true
+  return props.data.every(d => Number(d.dues) === 0 && Number(d.receipts) === 0)
+})
+
 const xAt = (i) => {
   const n = props.data.length
   const w = vbW - padL - padR
@@ -201,7 +216,7 @@ const gridYs = computed(() => {
 const yTicks = computed(() => {
   return gridYs.value.map((gy, i) => {
     const frac = 1 - (i / 4)
-    return { y: gy, label: Math.round(minVal.value + valRange.value * frac) }
+    return { y: gy, label: Number(minVal.value + valRange.value * frac).toFixed(2) }
   })
 })
 

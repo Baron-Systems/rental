@@ -264,7 +264,7 @@ const kpiCards = computed(() => [
     icon: IconBanknote,
     href: '/receipts',
     iconClass: 'text-emerald-600',
-    trend: 'up',
+    trend: (stats.value?.netCollections ?? 0) > 0 ? 'up' : 'neutral',
     trendLabel: 'التحصيل الفعلي',
   },
   {

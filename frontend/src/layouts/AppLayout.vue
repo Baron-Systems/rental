@@ -43,7 +43,7 @@
           @click="mobileOpen = false"
         >
           <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" :d="item.icon"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" :d="item.icon"/>
           </svg>
           <span>{{ item.label }}</span>
         </RouterLink>
