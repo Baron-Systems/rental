@@ -155,6 +155,29 @@
           </div>
         </Card>
 
+        <!-- Historical Statement (archived contracts only) -->
+        <Card v-if="contract.is_archived" padding="none">
+          <div class="flex items-center justify-between border-b border-ivory-300/60 px-5 py-4">
+            <h3 class="font-semibold text-navy-800">كشف الحساب التاريخي</h3>
+            <span class="text-xs text-navy-400">{{ historicalStatement?.lines?.length || 0 }} حركة</span>
+          </div>
+          <div v-if="historicalStatementLoading" class="text-center py-12 text-navy-400 text-sm">جاري تحميل كشف الحساب...</div>
+          <div v-else-if="!historicalStatement?.lines?.length" class="text-center py-12">
+            <p class="text-navy-400 font-medium">لا توجد حركات</p>
+            <p class="text-navy-300 text-sm mt-1">لا توجد حركات في كشف الحساب التاريخي.</p>
+          </div>
+          <DataTable v-else :columns="historicalColumns">
+            <TableRow v-for="(line, i) in historicalStatement.lines" :key="i">
+              <TableCell>{{ line.reference || '—' }}</TableCell>
+              <TableCell>{{ formatDate(line.date) }}</TableCell>
+              <TableCell>{{ line.typeName || line.type }}</TableCell>
+              <TableCell><span v-if="line.debit > 0" class="text-red-600 font-medium tabular-nums">{{ formatMoney(line.debit, currency) }}</span><span v-else class="text-navy-300">-</span></TableCell>
+              <TableCell><span v-if="line.credit > 0" class="text-emerald-600 font-medium tabular-nums">{{ formatMoney(line.credit, currency) }}</span><span v-else class="text-navy-300">-</span></TableCell>
+              <TableCell><span class="font-bold tabular-nums">{{ formatMoney(line.balance, currency) }}</span></TableCell>
+            </TableRow>
+          </DataTable>
+        </Card>
+
         <!-- Dues Table (source: page.tsx:539-583) -->
         <Card padding="none">
           <div class="flex items-center justify-between border-b border-ivory-300/60 px-5 py-4">
@@ -287,6 +310,8 @@ const showPastDuesDialog = ref(false)
 const cancelling = ref(false)
 
 const isProcessing = ref(false)
+const historicalStatement = ref(null)
+const historicalStatementLoading = ref(false)
 
 const dueColumns = [
   { key: 'number', label: 'رقم' },
@@ -294,6 +319,15 @@ const dueColumns = [
   { key: 'date', label: 'التاريخ' },
   { key: 'amount', label: 'المبلغ' },
   { key: 'status', label: 'الحالة' },
+]
+
+const historicalColumns = [
+  { key: 'ref', label: 'المرجع' },
+  { key: 'date', label: 'التاريخ' },
+  { key: 'type', label: 'النوع' },
+  { key: 'debit', label: 'المستحق' },
+  { key: 'credit', label: 'المدفوع' },
+  { key: 'balance', label: 'الرصيد' },
 ]
 
 // Source: [id]/page.tsx:162 — isApprovedHistorical uses isHistorical field, NOT period status
@@ -406,10 +440,29 @@ async function fetchContract() {
         .catch(() => { contractDues.value = [] })
     )
     await Promise.all(promises)
+    // Fetch historical statement for archived contracts
+    if (contract.value?.is_archived && contract.value?.tenant?.name) {
+      await fetchHistoricalStatement()
+    }
   } catch (e) {
     toast.error(extractError(e))
   } finally {
     loading.value = false
+  }
+}
+
+async function fetchHistoricalStatement() {
+  historicalStatementLoading.value = true
+  try {
+    historicalStatement.value = await callApi('rental.rental.api.tenant.get_tenant_statement_api', {
+      name: contract.value.tenant.name,
+      contract: contract.value.name,
+    })
+  } catch (e) {
+    toast.error(extractError(e))
+    historicalStatement.value = null
+  } finally {
+    historicalStatementLoading.value = false
   }
 }
 

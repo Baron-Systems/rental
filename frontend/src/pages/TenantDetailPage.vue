@@ -59,7 +59,7 @@
               <label class="text-xs text-navy-400">العقد</label>
               <select v-model="statementFilter.contractId" class="input-premium text-sm" :disabled="!tenant.contracts?.length" @change="handleContractFilterChange">
                 <option value="">كل العقود</option>
-                <option v-for="c in tenant.contracts" :key="c.name" :value="c.name">{{ contractLabel(c) }}</option>
+                <option v-for="c in activeContracts" :key="c.name" :value="c.name">{{ contractLabel(c) }}</option>
               </select>
             </div>
           </div>
@@ -199,6 +199,10 @@ const balanceColor = computed(() => {
   if (bal > 0) return 'red'
   if (bal < 0) return 'green'
   return 'muted'
+})
+
+const activeContracts = computed(() => {
+  return (tenant.value?.contracts || []).filter(c => !c.is_archived)
 })
 
 function balanceNumberClass(bal) {

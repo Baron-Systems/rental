@@ -180,6 +180,16 @@ def get_tenant_statement(
 	# ---- Collect dues ----
 	due_filters = {"tenant": tenant_name, "docstatus": 1}
 
+	# Operational statement: exclude archived contracts unless a specific contract is requested
+	if not filters.get("contract"):
+		archived_contracts = frappe.get_all(
+			"Lease Contract",
+			filters={"tenant": tenant_name, "is_archived": 1},
+			pluck="name",
+		)
+		if archived_contracts:
+			due_filters["contract"] = ["not in", archived_contracts]
+
 	if filters.get("start_date") and filters.get("end_date"):
 		due_filters["due_date"] = ["between", [filters["start_date"], filters["end_date"]]]
 	elif filters.get("start_date"):
@@ -229,6 +239,16 @@ def get_tenant_statement(
 
 	# ---- Collect receipts ----
 	receipt_filters = {"tenant": tenant_name, "docstatus": 1}
+
+	# Operational statement: exclude archived contracts unless a specific contract is requested
+	if not filters.get("contract"):
+		archived_contracts = frappe.get_all(
+			"Lease Contract",
+			filters={"tenant": tenant_name, "is_archived": 1},
+			pluck="name",
+		)
+		if archived_contracts:
+			receipt_filters["contract"] = ["not in", archived_contracts]
 
 	if filters.get("start_date") and filters.get("end_date"):
 		receipt_filters["receipt_date"] = ["between", [filters["start_date"], filters["end_date"]]]

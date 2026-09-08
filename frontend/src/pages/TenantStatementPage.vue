@@ -19,9 +19,9 @@
         <Card padding="md">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <label class="text-sm font-medium text-navy-700">تصفية حسب العقد</label>
-            <select v-model="filters.contractId" class="input-premium sm:max-w-sm" :disabled="!tenant.contracts?.length || (tenant.contracts?.length || 0) <= 1" @change="handleContractFilterChange">
+            <select v-model="filters.contractId" class="input-premium sm:max-w-sm" :disabled="!activeContracts?.length || (activeContracts?.length || 0) <= 1" @change="handleContractFilterChange">
               <option value="">كل العقود</option>
-              <option v-for="c in tenant.contracts" :key="c.name" :value="c.name">{{ contractLabel(c) }}</option>
+              <option v-for="c in activeContracts" :key="c.name" :value="c.name">{{ contractLabel(c) }}</option>
             </select>
           </div>
         </Card>
@@ -116,6 +116,10 @@ const closingColor = computed(() => {
   if (bal > 0) return 'red'
   if (bal < 0) return 'green'
   return 'muted'
+})
+
+const activeContracts = computed(() => {
+  return (tenant.value?.contracts || []).filter(c => !c.is_archived)
 })
 
 function contractLabel(c) {

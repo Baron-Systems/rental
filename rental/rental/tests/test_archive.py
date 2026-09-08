@@ -735,17 +735,59 @@ class TestArchive(FrappeTestCase):
 		contract_names = [r["contract"] for r in result.get("receipts", [])]
 		self.assertIn(ctx["contract"], contract_names)
 
-	def test_tenant_statement_contains_archived_movements(self):
-		"""Tenant Statement still contains archived-contract historical movements."""
+	def test_operational_statement_excludes_archived_contract_lines(self):
+		"""Operational statement (no contract filter) excludes archived-contract movements."""
 		ctx = self._setup_contract(rent=500)
 		self._archive_zero_balance_evicted(ctx)
 
 		from rental.rental.services.statement_service import get_tenant_statement
 		stmt = get_tenant_statement(ctx["tenant"])
 		lines = stmt.get("lines", [])
-		# The statement should contain lines referencing the archived contract
 		archived_lines = [l for l in lines if l.get("contract") == ctx["contract"]]
-		self.assertTrue(len(archived_lines) > 0, "Statement should contain archived contract movements")
+		self.assertEqual(len(archived_lines), 0, "Operational statement should NOT contain archived contract movements")
+
+	def test_specific_archived_contract_statement_returns_lines(self):
+		"""Statement with a specific archived contract filter returns its historical lines."""
+		ctx = self._setup_contract(rent=500)
+		self._archive_zero_balance_evicted(ctx)
+
+		from rental.rental.services.statement_service import get_tenant_statement
+		stmt = get_tenant_statement(ctx["tenant"], filters={"contract": ctx["contract"]})
+		lines = stmt.get("lines", [])
+		archived_lines = [l for l in lines if l.get("contract") == ctx["contract"]]
+		self.assertTrue(len(archived_lines) > 0, "Specific archived contract statement should contain its movements")
+
+	def test_specific_non_archived_contract_statement_returns_lines(self):
+		"""Statement with a specific non-archived contract filter returns its lines."""
+		ctx = self._setup_contract(rent=500)
+		# Don't archive
+		from rental.rental.services.statement_service import get_tenant_statement
+		stmt = get_tenant_statement(ctx["tenant"], filters={"contract": ctx["contract"]})
+		lines = stmt.get("lines", [])
+		contract_lines = [l for l in lines if l.get("contract") == ctx["contract"]]
+		self.assertTrue(len(contract_lines) > 0, "Specific non-archived contract statement should contain its movements")
+
+	def test_get_tenant_includes_archived_contracts_with_flag(self):
+		"""get_tenant returns archived contracts with is_archived so Frontend can filter them out of selectors."""
+		ctx = self._setup_contract(rent=500)
+		self._archive_zero_balance_evicted(ctx)
+
+		from rental.rental.api.tenant import get_tenant
+		result = get_tenant(ctx["tenant"])
+		contracts = result.get("contracts", [])
+		archived = [c for c in contracts if c.get("is_archived")]
+		self.assertTrue(len(archived) > 0, "get_tenant should include archived contracts with is_archived flag")
+
+	def test_get_tenant_statement_api_allows_archived_contract(self):
+		"""API allows fetching historical statement for a specific archived contract."""
+		ctx = self._setup_contract(rent=500)
+		self._archive_zero_balance_evicted(ctx)
+
+		from rental.rental.api.tenant import get_tenant_statement_api
+		stmt = get_tenant_statement_api(name=ctx["tenant"], contract=ctx["contract"])
+		lines = stmt.get("lines", [])
+		archived_lines = [l for l in lines if l.get("contract") == ctx["contract"]]
+		self.assertTrue(len(archived_lines) > 0, "API should return archived contract statement when contract is specified")
 
 	def test_tenant_balance_correct_after_archiving_zero_balance(self):
 		"""Tenant Balance remains mathematically correct after archiving a zero-balance contract."""
