@@ -75,9 +75,9 @@ def get_currency_lock_status(account: str | None = None) -> dict:
 # Legal-sensitive fields that require confirmation when approved contracts exist
 LEGAL_SENSITIVE_FIELDS = {
 	"landlord_name", "landlord_id", "landlord_phone", "landlord_address",
-	"landlord_type", "logo", "landlord_signature", "landlord_stamp",
+	"landlord_type", "logo",
 	"landlord_representative_name", "landlord_representative_id",
-	"landlord_representative_title", "landlord_representative_phone",
+	"landlord_representative_title",
 }
 
 
@@ -100,12 +100,9 @@ def get_lessor_data(account: str | None = None) -> dict:
 		"landlord_phone": settings.landlord_phone,
 		"landlord_address": settings.landlord_address,
 		"logo": settings.logo,
-		"landlord_signature": settings.landlord_signature,
-		"landlord_stamp": settings.landlord_stamp,
 		"landlord_representative_name": settings.landlord_representative_name,
 		"landlord_representative_id": settings.landlord_representative_id,
 		"landlord_representative_title": settings.landlord_representative_title,
-		"landlord_representative_phone": settings.landlord_representative_phone,
 		"currency": settings.currency,
 	}
 
