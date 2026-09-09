@@ -197,6 +197,10 @@
       </div>
       <template #footer>
         <button class="btn-premium btn-outline" @click="cancelAttrDialog">إلغاء</button>
+        <button class="btn-premium btn-outline" :disabled="attrSaving" @click="resetAttrPreferences">
+          <span v-if="attrSaving" class="w-4 h-4 border-2 border-navy-900/30 border-t-navy-900 rounded-full animate-spin"></span>
+          {{ attrSaving ? 'جاري الحفظ...' : 'إعادة الافتراضي' }}
+        </button>
         <button class="btn-premium btn-gold" :disabled="attrSaving" @click="saveAttrDraft">
           <span v-if="attrSaving" class="w-4 h-4 border-2 border-navy-900/30 border-t-navy-900 rounded-full animate-spin"></span>
           {{ attrSaving ? 'جاري الحفظ...' : 'تم' }}
@@ -233,6 +237,7 @@ const draftAttrs = ref([])       // local draft — changes are not sent until "
 const availableAttrs = ref([])
 const newAttrSelection = ref('')
 const attrSaving = ref(false)
+const originalAssignedAttrs = ref([])  // full original list from backend (for save payload)
 
 // Drag & Drop state
 const dragIndex = ref(null)
@@ -330,6 +335,7 @@ async function openAttributesDialog(ut) {
   attrDialogLoading.value = true
   newAttrSelection.value = ''
   draftAttrs.value = []
+  originalAssignedAttrs.value = []
   dragIndex.value = null
   dragOverIndex.value = null
   try {
@@ -345,10 +351,12 @@ async function openAttributesDialog(ut) {
       return (a.attribute_name || '').localeCompare(b.attribute_name || '')
     })
     draftAttrs.value = attrs
+    originalAssignedAttrs.value = assigned.attributes || []
     availableAttrs.value = available.attributes || []
   } catch (e) {
     toast.error(extractError(e))
     draftAttrs.value = []
+    originalAssignedAttrs.value = []
     availableAttrs.value = []
   } finally { attrDialogLoading.value = false }
 }
@@ -443,13 +451,34 @@ async function saveAttrDraft() {
   if (!attrDialogType.value) return
   attrSaving.value = true
   try {
-    // Build payload: list of {attribute, is_required, display_order}
-    const payload = draftAttrs.value.map((attr, idx) => ({
-      attribute: attr.attribute,
-      is_required: attr.is_required ? 1 : 0,
-      display_order: idx,
-    }))
-    await callApi('rental.rental.api.unit_settings.save_unit_type_attributes', {
+    // Build payload from ALL originally assigned attributes.
+    // Attributes still in draft → is_active=1 with new order.
+    // Attributes removed from draft → is_active=0 (preserving original order as fallback).
+    const draftMap = new Map()
+    draftAttrs.value.forEach((attr, idx) => {
+      draftMap.set(attr.attribute, { ...attr, display_order: idx })
+    })
+
+    const payload = originalAssignedAttrs.value.map((orig) => {
+      const draft = draftMap.get(orig.attribute)
+      if (draft) {
+        return {
+          attribute: orig.attribute,
+          is_required: draft.is_required ? 1 : 0,
+          is_active: 1,
+          display_order: draft.display_order,
+        }
+      }
+      // Removed from draft → hidden preference override
+      return {
+        attribute: orig.attribute,
+        is_required: orig.is_required ? 1 : 0,
+        is_active: 0,
+        display_order: orig.display_order || 0,
+      }
+    })
+
+    await callApi('rental.rental.api.unit_settings.save_user_unit_type_preferences', {
       unit_type: attrDialogType.value.name,
       attributes: JSON.stringify(payload),
     })
@@ -463,10 +492,28 @@ async function saveAttrDraft() {
   }
 }
 
+async function resetAttrPreferences() {
+  if (!attrDialogType.value) return
+  attrSaving.value = true
+  try {
+    await callApi('rental.rental.api.unit_settings.reset_user_unit_preferences', {
+      unit_type: attrDialogType.value.name,
+    })
+    // Reload dialog data so defaults are shown
+    await openAttributesDialog(attrDialogType.value)
+    toast.success('تمت إعادة الافتراضيات')
+  } catch (e) {
+    toast.error(extractError(e))
+  } finally {
+    attrSaving.value = false
+  }
+}
+
 // Cancel — close without saving
 function cancelAttrDialog() {
   attrDialogOpen.value = false
   draftAttrs.value = []
+  originalAssignedAttrs.value = []
   dragIndex.value = null
   dragOverIndex.value = null
 }

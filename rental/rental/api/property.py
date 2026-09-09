@@ -1071,11 +1071,19 @@ def get_unit_type_attributes_for_unit(unit_type):
 	"""Get active assigned attributes for a unit type, ordered by display_order.
 
 	Returns attribute metadata needed by the frontend to render dynamic fields.
+	Merged with User Unit Preference overrides if they exist.
 	"""
+	from rental.rental.api.unit_settings import _merge_attribute_override
+
 	type_doc = frappe.get_doc("Unit Type", unit_type)
 	result = []
 	for row in type_doc.attributes:
-		if not row.is_active:
+		merged = _merge_attribute_override(unit_type, row.attribute, {
+			"is_required": row.is_required,
+			"is_active": row.is_active,
+			"display_order": row.display_order,
+		})
+		if not merged["is_active"]:
 			continue
 		attr = frappe.db.get_value(
 			"Unit Attribute", row.attribute,
@@ -1094,8 +1102,9 @@ def get_unit_type_attributes_for_unit(unit_type):
 			"is_system": attr.is_system,
 			"capability_code": attr.capability_code or "",
 			"category": attr.category or "",
-			"is_required": row.is_required,
-			"display_order": row.display_order or 0,
+			"is_required": merged["is_required"],
+			"display_order": merged["display_order"],
+			"has_override": merged["has_override"],
 		})
 
 	result.sort(key=lambda x: (x["display_order"], x["attribute_name"]))
@@ -1228,13 +1237,20 @@ def _validate_required_attributes(unit_type, attribute_values):
 	"""Validate that all required attributes have non-empty values.
 
 	Called by create_unit and update_unit.
+	Respects User Unit Preference overrides for is_required and is_active.
 	"""
+	from rental.rental.api.unit_settings import _merge_attribute_override
+
 	type_doc = frappe.get_doc("Unit Type", unit_type) if unit_type else None
 	if not type_doc:
 		return
 
 	for row in type_doc.attributes:
-		if not row.is_active or not row.is_required:
+		merged = _merge_attribute_override(unit_type, row.attribute, {
+			"is_required": row.is_required,
+			"is_active": row.is_active,
+		})
+		if not merged["is_active"] or not merged["is_required"]:
 			continue
 		attr_name = frappe.db.get_value("Unit Attribute", row.attribute, "attribute_name")
 		val = attribute_values.get(row.attribute)

@@ -1,0 +1,111 @@
+{
+  "actions": [],
+  "autoname": "hash",
+  "creation": "2025-01-01 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "rental_account",
+    "user",
+    "unit_type",
+    "attribute",
+    "is_required",
+    "is_active",
+    "display_order"
+  ],
+  "fields": [
+    {
+      "fieldname": "rental_account",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Rental Account",
+      "options": "Rental Account",
+      "reqd": 1
+    },
+    {
+      "fieldname": "user",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "User",
+      "options": "User",
+      "reqd": 1
+    },
+    {
+      "fieldname": "unit_type",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Unit Type",
+      "options": "Unit Type",
+      "reqd": 1
+    },
+    {
+      "fieldname": "attribute",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Attribute",
+      "options": "Unit Attribute",
+      "reqd": 1
+    },
+    {
+      "default": "0",
+      "fieldname": "is_required",
+      "fieldtype": "Check",
+      "label": "Is Required"
+    },
+    {
+      "default": "1",
+      "fieldname": "is_active",
+      "fieldtype": "Check",
+      "label": "Is Active"
+    },
+    {
+      "default": "0",
+      "fieldname": "display_order",
+      "fieldtype": "Int",
+      "label": "Display Order"
+    }
+  ],
+  "index_web_pages_for_search": 0,
+  "is_submittable": 0,
+  "issingle": 0,
+  "istable": 0,
+  "links": [],
+  "modified": "2025-01-01 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Rental",
+  "name": "User Unit Preference",
+  "naming_rule": "Expression",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "if_owner": 0,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Rental Property Owner",
+      "select": 1,
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "display_order",
+  "sort_order": "ASC",
+  "states": [],
+  "track_changes": 1
+}

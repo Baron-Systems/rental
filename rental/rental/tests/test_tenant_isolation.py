@@ -89,14 +89,25 @@ class TestTenantIsolation(FrappeTestCase):
 		account = get_current_rental_account()
 		self.assertEqual(account, self.account_b)
 
-	def test_owner_cannot_read_rental_account_via_resource_api(self):
+	def test_owner_can_read_own_account_but_not_others(self):
 		frappe.set_user(self.owner_a)
 
-		has_perm = frappe.has_permission("Rental Account", doc=self.account_b, user=self.owner_a)
-		self.assertFalse(has_perm)
+		# Owner A CAN read their own account
+		has_perm_own = frappe.has_permission("Rental Account", doc=self.account_a, user=self.owner_a)
+		self.assertTrue(has_perm_own)
 
+		# Owner A CANNOT read Account B
+		has_perm_b = frappe.has_permission("Rental Account", doc=self.account_b, user=self.owner_a)
+		self.assertFalse(has_perm_b)
+
+		# Owner A has general read permission on Rental Account (filtered by permission_query_conditions)
 		can_read = frappe.has_permission("Rental Account", "read", user=self.owner_a)
-		self.assertFalse(can_read)
+		self.assertTrue(can_read)
+
+		# permission_query_conditions should filter by owner_user
+		from rental.rental.utils.permissions import get_permission_query_conditions
+		conditions = get_permission_query_conditions(self.owner_a, "Rental Account")
+		self.assertIn(self.owner_a, conditions)
 
 	def test_disabled_rental_account_blocks_app_access(self):
 		frappe.set_user("Administrator")

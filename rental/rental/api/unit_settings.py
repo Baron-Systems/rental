@@ -22,14 +22,59 @@ from rental.rental.services.unit_type_service import (
 # ---------------------------------------------------------------------------
 
 def _get_account_or_fallback() -> str | None:
-	"""Return the current user's rental account, or the first active account for System Manager."""
+	"""Return the current user's rental account, or the first active account for System Manager.
+
+	Uses a direct SQL query for the fallback to bypass any permission_query_conditions
+	that might filter out Rental Account records for System Managers.
+	"""
 	account = get_current_rental_account()
 	if account is not None:
 		return account
-	accounts = frappe.get_all("Rental Account", filters={"is_active": 1}, fields=["name"], limit=1)
+	# Direct DB query — bypasses permission_query_conditions
+	accounts = frappe.db.sql(
+		"SELECT name FROM `tabRental Account` WHERE is_active = 1 LIMIT 1",
+		as_dict=True,
+	)
 	if not accounts:
 		return None
 	return accounts[0]["name"]
+
+
+def _merge_attribute_override(unit_type: str, attribute: str, defaults: dict) -> dict:
+	"""Merge default Unit Type Attribute settings with a User Unit Preference override.
+
+	If no override exists for (current_account, current_user, unit_type, attribute),
+	returns defaults.  The rental_account and user are always derived from the
+	session — never trusted from frontend input.
+	"""
+	user = frappe.session.user
+	account = _get_account_or_fallback()
+	filters = {
+		"user": user,
+		"unit_type": unit_type,
+		"attribute": attribute,
+	}
+	if account:
+		filters["rental_account"] = account
+	override = frappe.db.get_value(
+		"User Unit Preference",
+		filters,
+		["is_required", "is_active", "display_order"],
+		as_dict=True,
+	)
+	if override:
+		return {
+			"is_required": int(override.is_required or 0),
+			"is_active": int(override.is_active if override.is_active is not None else 1),
+			"display_order": int(override.display_order or 0),
+			"has_override": True,
+		}
+	return {
+		"is_required": int(defaults.get("is_required", 0)),
+		"is_active": int(defaults.get("is_active", 1)),
+		"display_order": int(defaults.get("display_order", 0)),
+		"has_override": False,
+	}
 
 
 # ---------------------------------------------------------------------------
@@ -131,13 +176,21 @@ def create_unit_type(type_name, is_active=1, display_order=0):
 def update_unit_type(name, type_name=None, is_active=None, display_order=None):
 	"""Update a unit type.
 
-	System types: is_active and display_order can be changed by Property Owners.
+	System types are read-only for Rental Property Owners — any customization
+	(is_active, display_order) must be done via User Unit Preference overrides.
+	System Manager can still modify system types directly.
 	type_name (identity) can only be changed on custom types.
 	code and is_system are protected at the doctype level.
 	"""
 	doc = frappe.get_doc("Unit Type", name)
 	if not is_system_manager():
 		doc.check_permission("write")
+
+	if doc.is_system and not is_system_manager():
+		frappe.throw(
+			frappe._("لا يمكن تعديل أنواع الوحدات النظامية. استخدم تفضيلات المستخدم للتخصيص."),
+			frappe.PermissionError,
+		)
 
 	if type_name is not None and not doc.is_system:
 		new_name = type_name.strip()
@@ -185,6 +238,7 @@ def get_unit_type_attributes(unit_type):
 	"""Get the attribute assignments for a unit type.
 
 	Returns a list of dicts with attribute details and mapping settings.
+	Merged with User Unit Preference overrides if they exist.
 	"""
 	type_doc = frappe.get_doc("Unit Type", unit_type)
 	result = []
@@ -197,6 +251,11 @@ def get_unit_type_attributes(unit_type):
 		)
 		if not attr:
 			continue
+		merged = _merge_attribute_override(unit_type, row.attribute, {
+			"is_required": row.is_required,
+			"is_active": row.is_active,
+			"display_order": row.display_order,
+		})
 		result.append({
 			"name": row.name,
 			"attribute": row.attribute,
@@ -207,9 +266,10 @@ def get_unit_type_attributes(unit_type):
 			"attribute_active": attr.is_active,
 			"capability_code": attr.capability_code,
 			"category": attr.category,
-			"is_required": row.is_required,
-			"is_active": row.is_active,
-			"display_order": row.display_order,
+			"is_required": merged["is_required"],
+			"is_active": merged["is_active"],
+			"display_order": merged["display_order"],
+			"has_override": merged["has_override"],
 		})
 
 	# Sort by display_order then attribute_name
@@ -258,12 +318,20 @@ def get_available_attributes(unit_type):
 def add_unit_type_attribute(unit_type, attribute, is_required=0, display_order=0):
 	"""Add an attribute to a unit type.
 
-	Works for both system and custom unit types.  Identity fields
-	(code, is_system) are protected at the doctype level.
+	Works for custom unit types only.  System unit types are read-only for
+	Rental Property Owners — use User Unit Preference overrides instead.
+	System Manager can modify system types directly.
+	Identity fields (code, is_system) are protected at the doctype level.
 	"""
 	doc = frappe.get_doc("Unit Type", unit_type)
 	if not is_system_manager():
 		doc.check_permission("write")
+
+	if doc.is_system and not is_system_manager():
+		frappe.throw(
+			frappe._("لا يمكن تعديل أنواع الوحدات النظامية. استخدم تفضيلات المستخدم للتخصيص."),
+			frappe.PermissionError,
+		)
 
 	# Check not already assigned
 	for row in doc.attributes:
@@ -288,11 +356,19 @@ def add_unit_type_attribute(unit_type, attribute, is_required=0, display_order=0
 def update_unit_type_attribute(unit_type, row_name, is_required=None, is_active=None, display_order=None):
 	"""Update a unit type attribute mapping.
 
-	Works for both system and custom unit types.
+	Works for custom unit types only.  System unit types are read-only for
+	Rental Property Owners — use User Unit Preference overrides instead.
+	System Manager can modify system types directly.
 	"""
 	doc = frappe.get_doc("Unit Type", unit_type)
 	if not is_system_manager():
 		doc.check_permission("write")
+
+	if doc.is_system and not is_system_manager():
+		frappe.throw(
+			frappe._("لا يمكن تعديل أنواع الوحدات النظامية. استخدم تفضيلات المستخدم للتخصيص."),
+			frappe.PermissionError,
+		)
 
 	for row in doc.attributes:
 		if row.name == row_name:
@@ -316,11 +392,19 @@ def remove_unit_type_attribute(unit_type, row_name):
 	"""Remove an attribute from a unit type.
 
 	This does NOT delete stored values from existing rental units.
-	Works for both system and custom unit types.
+	Works for custom unit types only.  System unit types are read-only for
+	Rental Property Owners — use User Unit Preference overrides instead.
+	System Manager can modify system types directly.
 	"""
 	doc = frappe.get_doc("Unit Type", unit_type)
 	if not is_system_manager():
 		doc.check_permission("write")
+
+	if doc.is_system and not is_system_manager():
+		frappe.throw(
+			frappe._("لا يمكن تعديل أنواع الوحدات النظامية. استخدم تفضيلات المستخدم للتخصيص."),
+			frappe.PermissionError,
+		)
 
 	for i, row in enumerate(doc.attributes):
 		if row.name == row_name:
@@ -356,6 +440,12 @@ def save_unit_type_attributes(unit_type, attributes):
 	doc = frappe.get_doc("Unit Type", unit_type)
 	if not is_system_manager():
 		doc.check_permission("write")
+
+	if doc.is_system and not is_system_manager():
+		frappe.throw(
+			frappe._("لا يمكن تعديل أنواع الوحدات النظامية. استخدم تفضيلات المستخدم للتخصيص."),
+			frappe.PermissionError,
+		)
 
 	# Validate input — no duplicates, all attributes exist
 	seen = set()
@@ -402,6 +492,96 @@ def save_unit_type_attributes(unit_type, attributes):
 	doc.flags.ignore_version = True
 	doc.save(ignore_permissions=is_system_manager())
 	return {"success": True, "count": len(new_rows)}
+
+
+@frappe.whitelist()
+def save_user_unit_type_preferences(unit_type, attributes):
+	"""Save User Unit Preference overrides for a unit type's attributes.
+
+	Accepts a JSON list of dicts: ``[{attribute, is_required, is_active, display_order}, ...]``.
+	Only attributes already assigned to the Unit Type can have overrides.
+	Missing attributes in the payload keep their existing overrides (if any).
+	"""
+	import json
+
+	if isinstance(attributes, str):
+		attributes = json.loads(attributes)
+
+	user = frappe.session.user
+	account = _get_account_or_fallback()
+	if not account:
+		frappe.throw(
+			frappe._("No active Rental Account found. Please complete setup first."),
+			frappe.PermissionError,
+		)
+
+	# Ensure the unit type exists and the user can read it
+	type_doc = frappe.get_doc("Unit Type", unit_type)
+	assigned = {row.attribute for row in type_doc.attributes}
+
+	for item in attributes:
+		attr_name = item.get("attribute") or item.get("name")
+		if not attr_name:
+			continue
+		if attr_name not in assigned:
+			frappe.throw(
+				frappe._("الخاصية '{0}' غير مضافة إلى نوع الوحدة. لا يمكن إنشاء تفضيل لخاصية غير موجودة.").format(attr_name),
+				frappe.ValidationError,
+			)
+
+		existing_filters = {
+			"user": user,
+			"unit_type": unit_type,
+			"attribute": attr_name,
+		}
+		if account:
+			existing_filters["rental_account"] = account
+		existing = frappe.db.get_value(
+			"User Unit Preference",
+			existing_filters,
+			"name",
+		)
+		if existing:
+			doc = frappe.get_doc("User Unit Preference", existing)
+			doc.is_required = int(item.get("is_required", 0))
+			doc.is_active = int(item.get("is_active", 1))
+			doc.display_order = int(item.get("display_order", 0))
+			doc.save(ignore_permissions=True)
+		else:
+			frappe.get_doc({
+				"doctype": "User Unit Preference",
+				"rental_account": account,
+				"user": user,
+				"unit_type": unit_type,
+				"attribute": attr_name,
+				"is_required": int(item.get("is_required", 0)),
+				"is_active": int(item.get("is_active", 1)),
+				"display_order": int(item.get("display_order", 0)),
+			}).insert(ignore_permissions=True)
+
+	return {"success": True}
+
+
+@frappe.whitelist()
+def reset_user_unit_preferences(unit_type=None):
+	"""Delete all User Unit Preference overrides for the current user.
+
+	If ``unit_type`` is provided, only preferences for that unit type are removed.
+	If omitted, ALL user unit preferences are removed.
+	"""
+	user = frappe.session.user
+	account = _get_account_or_fallback()
+	filters = {"user": user}
+	if account:
+		filters["rental_account"] = account
+	if unit_type:
+		filters["unit_type"] = unit_type
+
+	prefs = frappe.get_all("User Unit Preference", filters=filters, pluck="name")
+	for name in prefs:
+		frappe.delete_doc("User Unit Preference", name, ignore_permissions=True)
+
+	return {"success": True, "removed": len(prefs)}
 
 
 # ---------------------------------------------------------------------------
@@ -533,7 +713,10 @@ def update_unit_attribute(
 ):
 	"""Update a unit attribute.
 
-	System attributes: is_active and display_order can be changed by Property Owners.
+	System attributes are read-only for Rental Property Owners — any
+	customization (is_active, display_order) must be done via User Unit
+	Preference overrides.  System Manager can still modify system attributes
+	directly.
 	Identity fields (attribute_name, data_type, code, is_system, capability_code)
 	are protected at the doctype level.
 	Custom attributes: all fields can be changed.
@@ -542,6 +725,12 @@ def update_unit_attribute(
 	doc = frappe.get_doc("Unit Attribute", name)
 	if not is_system_manager():
 		doc.check_permission("write")
+
+	if doc.is_system and not is_system_manager():
+		frappe.throw(
+			frappe._("لا يمكن تعديل خصائص الوحدات النظامية. استخدم تفضيلات المستخدم للتخصيص."),
+			frappe.PermissionError,
+		)
 
 	# Custom attributes: allow identity field updates
 	if not doc.is_system:

@@ -278,9 +278,9 @@ class TestUnitTypes(FrappeTestCase):
 		with self.assertRaises(frappe.PermissionError):
 			doc.save(ignore_permissions=True)
 
-	def test_4_can_add_attribute_to_system_unit_type(self):
-		"""Test 4: Property Owner can add an attribute to a System Unit Type."""
-		from rental.rental.api.unit_settings import add_unit_type_attribute, remove_unit_type_attribute
+	def test_4_cannot_add_attribute_to_system_unit_type(self):
+		"""Test 4: Property Owner CANNOT add an attribute to a System Unit Type."""
+		from rental.rental.api.unit_settings import add_unit_type_attribute
 		system_type = frappe.db.get_value("Unit Type", {"code": "apartment", "is_system": 1}, "name")
 		# Create a custom attribute to add
 		frappe.set_user("Administrator")
@@ -295,153 +295,67 @@ class TestUnitTypes(FrappeTestCase):
 		attr.insert(ignore_permissions=True)
 		self._created_unit_attrs.append(attr.name)
 
-		# Add it to the system type as the Property Owner
+		# Property Owner cannot add to system type
 		frappe.set_user(self.owner)
-		result = add_unit_type_attribute(unit_type=system_type, attribute=attr.name, is_required=0, display_order=5)
-		self.assertTrue(result.get("success"))
+		with self.assertRaises(frappe.PermissionError):
+			add_unit_type_attribute(unit_type=system_type, attribute=attr.name, is_required=0, display_order=5)
 
-		# Verify it was added
-		type_doc = frappe.get_doc("Unit Type", system_type)
-		added = [r for r in type_doc.attributes if r.attribute == attr.name]
-		self.assertEqual(len(added), 1)
-		self.assertEqual(added[0].display_order, 5)
-
-		# Clean up — remove it
-		remove_unit_type_attribute(unit_type=system_type, row_name=added[0].name)
-
-	def test_5_can_remove_attribute_from_system_unit_type(self):
-		"""Test 5: Property Owner can remove an attribute from a System Unit Type."""
-		from rental.rental.api.unit_settings import add_unit_type_attribute, remove_unit_type_attribute
+	def test_5_cannot_remove_attribute_from_system_unit_type(self):
+		"""Test 5: Property Owner CANNOT remove an attribute from a System Unit Type."""
+		from rental.rental.api.unit_settings import remove_unit_type_attribute
 		system_type = frappe.db.get_value("Unit Type", {"code": "apartment", "is_system": 1}, "name")
-		# Create a custom attribute
-		frappe.set_user("Administrator")
-		attr_name = f"TestRemoveAttr_{frappe.utils.random_string(4)}"
-		attr = frappe.get_doc({
-			"doctype": "Unit Attribute",
-			"attribute_name": attr_name,
-			"data_type": "Text",
-			"is_system": 0,
-			"rental_account": self.account,
-		})
-		attr.insert(ignore_permissions=True)
-		self._created_unit_attrs.append(attr.name)
 
-		# Add it
+		# Get an existing attribute row
+		type_doc = frappe.get_doc("Unit Type", system_type)
+		if not type_doc.attributes:
+			self.skipTest("No attributes to test")
+		row = type_doc.attributes[0]
+
 		frappe.set_user(self.owner)
-		add_unit_type_attribute(unit_type=system_type, attribute=attr.name)
-		type_doc = frappe.get_doc("Unit Type", system_type)
-		row = [r for r in type_doc.attributes if r.attribute == attr.name][0]
+		with self.assertRaises(frappe.PermissionError):
+			remove_unit_type_attribute(unit_type=system_type, row_name=row.name)
 
-		# Remove it
-		result = remove_unit_type_attribute(unit_type=system_type, row_name=row.name)
-		self.assertTrue(result.get("success"))
-
-		# Verify removed
-		type_doc = frappe.get_doc("Unit Type", system_type)
-		remaining = [r for r in type_doc.attributes if r.attribute == attr.name]
-		self.assertEqual(len(remaining), 0)
-
-	def test_6_can_change_is_required_on_system_unit_type(self):
-		"""Test 6: Property Owner can change is_required on a System Unit Type attribute."""
-		from rental.rental.api.unit_settings import add_unit_type_attribute, update_unit_type_attribute, remove_unit_type_attribute
+	def test_6_cannot_change_is_required_on_system_unit_type(self):
+		"""Test 6: Property Owner CANNOT change is_required on a System Unit Type attribute."""
+		from rental.rental.api.unit_settings import update_unit_type_attribute
 		system_type = frappe.db.get_value("Unit Type", {"code": "apartment", "is_system": 1}, "name")
-		frappe.set_user("Administrator")
-		attr_name = f"TestReqAttr_{frappe.utils.random_string(4)}"
-		attr = frappe.get_doc({
-			"doctype": "Unit Attribute",
-			"attribute_name": attr_name,
-			"data_type": "Text",
-			"is_system": 0,
-			"rental_account": self.account,
-		})
-		attr.insert(ignore_permissions=True)
-		self._created_unit_attrs.append(attr.name)
 
-		# Add with is_required=0
+		type_doc = frappe.get_doc("Unit Type", system_type)
+		if not type_doc.attributes:
+			self.skipTest("No attributes to test")
+		row = type_doc.attributes[0]
+
 		frappe.set_user(self.owner)
-		add_unit_type_attribute(unit_type=system_type, attribute=attr.name, is_required=0)
-		type_doc = frappe.get_doc("Unit Type", system_type)
-		row = [r for r in type_doc.attributes if r.attribute == attr.name][0]
-		self.assertEqual(row.is_required, 0)
+		with self.assertRaises(frappe.PermissionError):
+			update_unit_type_attribute(unit_type=system_type, row_name=row.name, is_required=1)
 
-		# Change is_required to 1
-		update_unit_type_attribute(unit_type=system_type, row_name=row.name, is_required=1)
-		type_doc = frappe.get_doc("Unit Type", system_type)
-		row = [r for r in type_doc.attributes if r.attribute == attr.name][0]
-		self.assertEqual(row.is_required, 1)
-
-		# Clean up
-		remove_unit_type_attribute(unit_type=system_type, row_name=row.name)
-
-	def test_7_can_change_display_order_on_system_unit_type(self):
-		"""Test 7: Property Owner can change display_order on a System Unit Type attribute."""
-		from rental.rental.api.unit_settings import add_unit_type_attribute, update_unit_type_attribute, remove_unit_type_attribute
+	def test_7_cannot_change_display_order_on_system_unit_type(self):
+		"""Test 7: Property Owner CANNOT change display_order on a System Unit Type attribute."""
+		from rental.rental.api.unit_settings import update_unit_type_attribute
 		system_type = frappe.db.get_value("Unit Type", {"code": "apartment", "is_system": 1}, "name")
-		frappe.set_user("Administrator")
-		attr_name = f"TestOrderAttr_{frappe.utils.random_string(4)}"
-		attr = frappe.get_doc({
-			"doctype": "Unit Attribute",
-			"attribute_name": attr_name,
-			"data_type": "Text",
-			"is_system": 0,
-			"rental_account": self.account,
-		})
-		attr.insert(ignore_permissions=True)
-		self._created_unit_attrs.append(attr.name)
 
-		# Add with display_order=10
+		type_doc = frappe.get_doc("Unit Type", system_type)
+		if not type_doc.attributes:
+			self.skipTest("No attributes to test")
+		row = type_doc.attributes[0]
+
 		frappe.set_user(self.owner)
-		add_unit_type_attribute(unit_type=system_type, attribute=attr.name, display_order=10)
-		type_doc = frappe.get_doc("Unit Type", system_type)
-		row = [r for r in type_doc.attributes if r.attribute == attr.name][0]
-		self.assertEqual(row.display_order, 10)
+		with self.assertRaises(frappe.PermissionError):
+			update_unit_type_attribute(unit_type=system_type, row_name=row.name, display_order=99)
 
-		# Change display_order to 99
-		update_unit_type_attribute(unit_type=system_type, row_name=row.name, display_order=99)
-		type_doc = frappe.get_doc("Unit Type", system_type)
-		row = [r for r in type_doc.attributes if r.attribute == attr.name][0]
-		self.assertEqual(row.display_order, 99)
-
-		# Clean up
-		remove_unit_type_attribute(unit_type=system_type, row_name=row.name)
-
-	def test_8_can_change_is_active_on_system_unit_type_attribute(self):
-		"""Test 8: Property Owner can change is_active on a System Unit Type attribute mapping."""
-		from rental.rental.api.unit_settings import add_unit_type_attribute, update_unit_type_attribute, remove_unit_type_attribute
+	def test_8_cannot_change_is_active_on_system_unit_type_attribute(self):
+		"""Test 8: Property Owner CANNOT change is_active on a System Unit Type attribute mapping."""
+		from rental.rental.api.unit_settings import update_unit_type_attribute
 		system_type = frappe.db.get_value("Unit Type", {"code": "apartment", "is_system": 1}, "name")
-		frappe.set_user("Administrator")
-		attr_name = f"TestActiveAttr_{frappe.utils.random_string(4)}"
-		attr = frappe.get_doc({
-			"doctype": "Unit Attribute",
-			"attribute_name": attr_name,
-			"data_type": "Text",
-			"is_system": 0,
-			"rental_account": self.account,
-		})
-		attr.insert(ignore_permissions=True)
-		self._created_unit_attrs.append(attr.name)
 
-		# Add with is_active=1 (default)
+		type_doc = frappe.get_doc("Unit Type", system_type)
+		if not type_doc.attributes:
+			self.skipTest("No attributes to test")
+		row = type_doc.attributes[0]
+
 		frappe.set_user(self.owner)
-		add_unit_type_attribute(unit_type=system_type, attribute=attr.name)
-		type_doc = frappe.get_doc("Unit Type", system_type)
-		row = [r for r in type_doc.attributes if r.attribute == attr.name][0]
-		self.assertEqual(row.is_active, 1)
-
-		# Deactivate
-		update_unit_type_attribute(unit_type=system_type, row_name=row.name, is_active=0)
-		type_doc = frappe.get_doc("Unit Type", system_type)
-		row = [r for r in type_doc.attributes if r.attribute == attr.name][0]
-		self.assertEqual(row.is_active, 0)
-
-		# Reactivate
-		update_unit_type_attribute(unit_type=system_type, row_name=row.name, is_active=1)
-		type_doc = frappe.get_doc("Unit Type", system_type)
-		row = [r for r in type_doc.attributes if r.attribute == attr.name][0]
-		self.assertEqual(row.is_active, 1)
-
-		# Clean up
-		remove_unit_type_attribute(unit_type=system_type, row_name=row.name)
+		with self.assertRaises(frappe.PermissionError):
+			update_unit_type_attribute(unit_type=system_type, row_name=row.name, is_active=0)
 
 	def test_9_custom_unit_type_still_works(self):
 		"""Test 9: Custom Unit Type operations remain unchanged."""
@@ -476,10 +390,26 @@ class TestUnitTypes(FrappeTestCase):
 			save_unit_type_attributes,
 			get_unit_type_attributes,
 		)
-		system_type = frappe.db.get_value("Unit Type", {"code": "apartment", "is_system": 1}, "name")
+		# Use a custom type — system types are read-only for Property Owners
+		frappe.set_user("Administrator")
+		rooms_attr = frappe.db.get_value("Unit Attribute", {"code": "rooms_count"}, "name")
+		bathrooms_attr = frappe.db.get_value("Unit Attribute", {"code": "bathrooms_count"}, "name")
+		custom_type = frappe.get_doc({
+			"doctype": "Unit Type",
+			"type_name": f"BatchReorder {frappe.utils.random_string(4)}",
+			"is_system": 0,
+			"rental_account": self.account,
+			"is_active": 1,
+			"attributes": [
+				{"attribute": rooms_attr, "is_required": 0, "is_active": 1, "display_order": 0},
+				{"attribute": bathrooms_attr, "is_required": 0, "is_active": 1, "display_order": 1},
+			],
+		})
+		custom_type.insert(ignore_permissions=True)
+		self._created_unit_types.append(custom_type.name)
 
 		# Get current attributes
-		res = get_unit_type_attributes(system_type)
+		res = get_unit_type_attributes(custom_type.name)
 		original_attrs = res["attributes"]
 		self.assertTrue(len(original_attrs) > 0)
 
@@ -491,11 +421,11 @@ class TestUnitTypes(FrappeTestCase):
 		])
 
 		frappe.set_user(self.owner)
-		result = save_unit_type_attributes(unit_type=system_type, attributes=payload)
+		result = save_unit_type_attributes(unit_type=custom_type.name, attributes=payload)
 		self.assertTrue(result.get("success"))
 
 		# Verify new order
-		res2 = get_unit_type_attributes(system_type)
+		res2 = get_unit_type_attributes(custom_type.name)
 		new_attrs = res2["attributes"]
 		# Sort by display_order
 		new_attrs_sorted = sorted(new_attrs, key=lambda a: a.get("display_order", 0))
@@ -505,41 +435,56 @@ class TestUnitTypes(FrappeTestCase):
 		for idx, a in enumerate(new_attrs_sorted):
 			self.assertEqual(a["display_order"], idx)
 
-		# Restore original order
-		original_payload = json.dumps([
-			{"attribute": a["attribute"], "is_required": a["is_required"], "display_order": idx}
-			for idx, a in enumerate(original_attrs)
-		])
-		save_unit_type_attributes(unit_type=system_type, attributes=original_payload)
-
 	def test_batch_save_rejects_duplicates(self):
 		"""Batch save rejects duplicate attributes in the list."""
 		import json
 		from rental.rental.api.unit_settings import save_unit_type_attributes
-		system_type = frappe.db.get_value("Unit Type", {"code": "apartment", "is_system": 1}, "name")
-		res = frappe.get_doc("Unit Type", system_type)
-		if not res.attributes:
-			self.skipTest("No attributes to test")
-		attr_name = res.attributes[0].attribute
+		# Use a custom type — system types are read-only for Property Owners
+		frappe.set_user("Administrator")
+		rooms_attr = frappe.db.get_value("Unit Attribute", {"code": "rooms_count"}, "name")
+		custom_type = frappe.get_doc({
+			"doctype": "Unit Type",
+			"type_name": f"BatchDup {frappe.utils.random_string(4)}",
+			"is_system": 0,
+			"rental_account": self.account,
+			"is_active": 1,
+			"attributes": [
+				{"attribute": rooms_attr, "is_required": 0, "is_active": 1, "display_order": 0},
+			],
+		})
+		custom_type.insert(ignore_permissions=True)
+		self._created_unit_types.append(custom_type.name)
+
 		payload = json.dumps([
-			{"attribute": attr_name, "is_required": 0, "display_order": 0},
-			{"attribute": attr_name, "is_required": 0, "display_order": 1},
+			{"attribute": rooms_attr, "is_required": 0, "display_order": 0},
+			{"attribute": rooms_attr, "is_required": 0, "display_order": 1},
 		])
 		frappe.set_user(self.owner)
 		with self.assertRaises(frappe.ValidationError):
-			save_unit_type_attributes(unit_type=system_type, attributes=payload)
+			save_unit_type_attributes(unit_type=custom_type.name, attributes=payload)
 
 	def test_batch_save_rejects_nonexistent_attribute(self):
 		"""Batch save rejects an attribute that doesn't exist."""
 		import json
 		from rental.rental.api.unit_settings import save_unit_type_attributes
-		system_type = frappe.db.get_value("Unit Type", {"code": "apartment", "is_system": 1}, "name")
+		# Use a custom type — system types are read-only for Property Owners
+		frappe.set_user("Administrator")
+		custom_type = frappe.get_doc({
+			"doctype": "Unit Type",
+			"type_name": f"BatchNonexist {frappe.utils.random_string(4)}",
+			"is_system": 0,
+			"rental_account": self.account,
+			"is_active": 1,
+		})
+		custom_type.insert(ignore_permissions=True)
+		self._created_unit_types.append(custom_type.name)
+
 		payload = json.dumps([
 			{"attribute": "NONEXISTENT-ATTR-12345", "is_required": 0, "display_order": 0},
 		])
 		frappe.set_user(self.owner)
 		with self.assertRaises(frappe.ValidationError):
-			save_unit_type_attributes(unit_type=system_type, attributes=payload)
+			save_unit_type_attributes(unit_type=custom_type.name, attributes=payload)
 
 	def test_batch_save_adds_and_removes(self):
 		"""Batch save can add new attributes and remove existing ones in one call."""
@@ -593,14 +538,29 @@ class TestUnitTypes(FrappeTestCase):
 		import json
 		from rental.rental.api.unit_settings import (
 			save_unit_type_attributes,
-			add_unit_type_attribute,
 			update_unit_type_attribute,
 			get_unit_type_attributes,
 		)
-		system_type = frappe.db.get_value("Unit Type", {"code": "apartment", "is_system": 1}, "name")
+		# Use a custom type — system types are read-only for Property Owners
+		frappe.set_user("Administrator")
+		rooms_attr = frappe.db.get_value("Unit Attribute", {"code": "rooms_count"}, "name")
+		bathrooms_attr = frappe.db.get_value("Unit Attribute", {"code": "bathrooms_count"}, "name")
+		custom_type = frappe.get_doc({
+			"doctype": "Unit Type",
+			"type_name": f"BatchPreserve {frappe.utils.random_string(4)}",
+			"is_system": 0,
+			"rental_account": self.account,
+			"is_active": 1,
+			"attributes": [
+				{"attribute": rooms_attr, "is_required": 0, "is_active": 1, "display_order": 0},
+				{"attribute": bathrooms_attr, "is_required": 0, "is_active": 1, "display_order": 1},
+			],
+		})
+		custom_type.insert(ignore_permissions=True)
+		self._created_unit_types.append(custom_type.name)
 
 		# Get current attributes
-		res = get_unit_type_attributes(system_type)
+		res = get_unit_type_attributes(custom_type.name)
 		original_attrs = res["attributes"]
 		if not original_attrs:
 			self.skipTest("No attributes to test")
@@ -609,7 +569,7 @@ class TestUnitTypes(FrappeTestCase):
 		first_attr = original_attrs[0]
 		frappe.set_user(self.owner)
 		update_unit_type_attribute(
-			unit_type=system_type,
+			unit_type=custom_type.name,
 			row_name=first_attr["name"],
 			is_active=0,
 		)
@@ -619,19 +579,12 @@ class TestUnitTypes(FrappeTestCase):
 			{"attribute": a["attribute"], "is_required": a["is_required"], "display_order": idx}
 			for idx, a in enumerate(original_attrs)
 		])
-		save_unit_type_attributes(unit_type=system_type, attributes=payload)
+		save_unit_type_attributes(unit_type=custom_type.name, attributes=payload)
 
 		# Verify is_active is still 0 for the first attribute
-		res2 = get_unit_type_attributes(system_type)
+		res2 = get_unit_type_attributes(custom_type.name)
 		first_after = [a for a in res2["attributes"] if a["attribute"] == first_attr["attribute"]][0]
 		self.assertEqual(int(first_after["is_active"]), 0)
-
-		# Restore is_active
-		update_unit_type_attribute(
-			unit_type=system_type,
-			row_name=first_after["name"],
-			is_active=1,
-		)
 
 
 class TestUnitAttributes(FrappeTestCase):
@@ -1014,42 +967,29 @@ class TestUnitAttributes(FrappeTestCase):
 		with self.assertRaises(frappe.PermissionError):
 			doc.save(ignore_permissions=True)
 
-	def test_attr_7_system_attribute_is_active_can_be_changed(self):
-		"""Test 7: System Attribute is_active CAN be changed by Property Owner."""
+	def test_attr_7_system_attribute_is_active_cannot_be_changed_by_owner(self):
+		"""Test 7: System Attribute is_active CANNOT be changed by Property Owner."""
 		from rental.rental.api.unit_settings import update_unit_attribute
 		attr = frappe.db.get_value("Unit Attribute", {"code": "furnished", "is_system": 1}, "name")
-		original_active = frappe.db.get_value("Unit Attribute", attr, "is_active")
 
 		frappe.set_user(self.owner)
-		try:
-			# Toggle is_active
-			new_val = 0 if int(original_active or 0) == 1 else 1
-			update_unit_attribute(name=attr, is_active=new_val)
-			saved = frappe.db.get_value("Unit Attribute", attr, "is_active")
-			self.assertEqual(int(saved), int(new_val))
-		finally:
-			# Restore original
-			frappe.set_user("Administrator")
-			frappe.db.set_value("Unit Attribute", attr, "is_active", original_active, update_modified=False)
+		with self.assertRaises(frappe.PermissionError):
+			update_unit_attribute(name=attr, is_active=0)
 
-	def test_attr_8_system_attribute_display_order_can_be_changed(self):
-		"""Test 8: System Attribute display_order CAN be changed by Property Owner."""
+	def test_attr_8_system_attribute_display_order_cannot_be_changed_by_owner(self):
+		"""Test 8: System Attribute display_order CANNOT be changed by Property Owner."""
 		from rental.rental.api.unit_settings import update_unit_attribute
 		attr = frappe.db.get_value("Unit Attribute", {"code": "air_conditioning", "is_system": 1}, "name")
-		original_order = frappe.db.get_value("Unit Attribute", attr, "display_order")
 
 		frappe.set_user(self.owner)
-		try:
+		with self.assertRaises(frappe.PermissionError):
 			update_unit_attribute(name=attr, display_order=999)
-			saved = frappe.db.get_value("Unit Attribute", attr, "display_order")
-			self.assertEqual(int(saved), 999)
-		finally:
-			# Restore original
-			frappe.set_user("Administrator")
-			frappe.db.set_value("Unit Attribute", attr, "display_order", original_order, update_modified=False)
 
 	def test_attr_9_disabling_does_not_delete_attribute_values(self):
-		"""Test 9: Disabling a System Attribute does NOT delete Unit Attribute Values."""
+		"""Test 9: Disabling a System Attribute does NOT delete Unit Attribute Values.
+
+		System attributes can only be disabled by System Manager.
+		"""
 		from rental.rental.api.unit_settings import update_unit_attribute
 		attr = frappe.db.get_value("Unit Attribute", {"code": "rooms_count", "is_system": 1}, "name")
 		original_active = frappe.db.get_value("Unit Attribute", attr, "is_active")
@@ -1069,8 +1009,7 @@ class TestUnitAttributes(FrappeTestCase):
 		val.insert(ignore_permissions=True)
 		self._created_attr_values.append(val.name)
 
-		# Disable the attribute
-		frappe.set_user(self.owner)
+		# Disable the attribute as System Manager (Property Owners can't)
 		update_unit_attribute(name=attr, is_active=0)
 
 		# Verify the attribute value still exists
@@ -1083,7 +1022,10 @@ class TestUnitAttributes(FrappeTestCase):
 		frappe.db.set_value("Unit Attribute", attr, "is_active", original_active, update_modified=False)
 
 	def test_attr_10_disabling_does_not_delete_type_mappings(self):
-		"""Test 10: Disabling a System Attribute does NOT delete Unit Type Attribute mappings."""
+		"""Test 10: Disabling a System Attribute does NOT delete Unit Type Attribute mappings.
+
+		System attributes can only be disabled by System Manager.
+		"""
 		from rental.rental.api.unit_settings import update_unit_attribute
 		attr = frappe.db.get_value("Unit Attribute", {"code": "furnished", "is_system": 1}, "name")
 		original_active = frappe.db.get_value("Unit Attribute", attr, "is_active")
@@ -1091,8 +1033,8 @@ class TestUnitAttributes(FrappeTestCase):
 		# Count existing type mappings for this attribute
 		mappings_before = frappe.db.count("Unit Type Attribute", {"attribute": attr})
 
-		# Disable the attribute
-		frappe.set_user(self.owner)
+		# Disable the attribute as System Manager (Property Owners can't)
+		frappe.set_user("Administrator")
 		update_unit_attribute(name=attr, is_active=0)
 
 		# Verify mappings still exist
