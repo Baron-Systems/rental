@@ -60,9 +60,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { frappeRequest } from 'frappe-ui'
 import { extractError, callApi } from '@/composables/useApi'
+import { useToast } from '@/composables/useToast'
 import Modal from '@/components/ui/Modal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import UnitAttributeFields from '@/components/buildings/UnitAttributeFields.vue'
+
+const toast = useToast()
 
 const props = defineProps({
   unit: { type: Object, required: true },
@@ -230,7 +233,7 @@ async function save() {
     })
     emit('saved')
   } catch (e) {
-    alert(extractError(e) || 'تعذّر حفظ البيانات')
+    toast.error(extractError(e) || 'تعذّر حفظ البيانات')
   } finally {
     saving.value = false
   }

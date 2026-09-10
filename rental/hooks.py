@@ -139,14 +139,14 @@ ACCOUNT_SCOPED_DOCTYPES = [
 	"Unit Type",
 	"Unit Attribute",
 	"Unit Attribute Value",
+	"Account Unit Type Attribute",
+	"Account Unit Type",
 ]
 
 permission_query_conditions = {
 	dt: "rental.rental.utils.permissions.get_permission_query_conditions"
 	for dt in ACCOUNT_SCOPED_DOCTYPES
 }
-# User Unit Preference needs a custom condition (rental_account + user, not just rental_account)
-permission_query_conditions["User Unit Preference"] = "rental.rental.utils.permissions.get_permission_query_conditions"
 # Rental Account uses owner_user (not rental_account field) for isolation
 permission_query_conditions["Rental Account"] = "rental.rental.utils.permissions.get_permission_query_conditions"
 
@@ -154,7 +154,6 @@ has_permission = {
 	dt: "rental.rental.utils.permissions.has_account_permission"
 	for dt in ACCOUNT_SCOPED_DOCTYPES
 }
-has_permission["User Unit Preference"] = "rental.rental.utils.permissions.has_account_permission"
 has_permission["Rental Account"] = "rental.rental.utils.permissions.has_account_permission"
 
 # Document Events

@@ -29,8 +29,11 @@ def get_permission_query_conditions(user: str | None = None, doctype: str | None
 	if doctype in ("Rental Due Type", "Unit Type", "Unit Attribute"):
 		return f"""(`tab{doctype}`.`rental_account` = "{account}" OR `tab{doctype}`.`is_system` = 1 OR `tab{doctype}`.`rental_account` IS NULL)"""
 
-	if doctype == "User Unit Preference":
-		return f'`tab{doctype}`.`rental_account` = "{account}" AND `tab{doctype}`.`user` = "{user}"'
+	if doctype == "Account Unit Type Attribute":
+		return f'`tab{doctype}`.`rental_account` = "{account}"'
+
+	if doctype == "Account Unit Type":
+		return f'`tab{doctype}`.`rental_account` = "{account}"'
 
 	# Rental Account: filter by owner_user (the account itself has no rental_account field)
 	if doctype == "Rental Account":
@@ -52,15 +55,25 @@ def has_account_permission(doc, user: str | None = None) -> bool:
 			return doc.owner_user == user
 		return True
 
-	# User Unit Preference: must match both rental_account AND user
-	if doc.doctype == "User Unit Preference":
+	# Account Unit Type Attribute: must match rental_account (no user dimension)
+	if doc.doctype == "Account Unit Type Attribute":
 		try:
 			account = get_current_rental_account()
 		except (frappe.PermissionError, frappe.ValidationError):
 			return False
 		if not account:
 			return True
-		return doc.rental_account == account and doc.user == user
+		return doc.rental_account == account
+
+	# Account Unit Type: must match rental_account (no user dimension)
+	if doc.doctype == "Account Unit Type":
+		try:
+			account = get_current_rental_account()
+		except (frappe.PermissionError, frappe.ValidationError):
+			return False
+		if not account:
+			return True
+		return doc.rental_account == account
 
 	if doc.doctype in ("Rental Due Type", "Unit Type", "Unit Attribute"):
 		if doc.get("is_system"):

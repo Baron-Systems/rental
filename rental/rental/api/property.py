@@ -1044,7 +1044,10 @@ def get_unit_permissions(name):
 def get_active_unit_types():
 	"""Return active unit types for the current account (for dropdowns).
 
-	Includes system types and the account's custom types.
+	The effective is_active for each System Unit Type is resolved from:
+	  1. Account Unit Type override (rental_account, unit_type) if present.
+	  2. System Unit Type.is_active otherwise.
+	Custom (non-system) types use their own is_active directly.
 	For edit forms, the unit's current type (even if disabled) should be
 	included by the caller separately.
 	"""
@@ -1052,49 +1055,96 @@ def get_active_unit_types():
 	ensure_system_unit_types()
 
 	account = get_current_rental_account()
-	or_filters = {}
+
+	# Fetch ALL system types + the account's custom types (no DB-level is_active filter
+	# on system types, because the account override may enable a system-disabled type).
+	or_filters = {"is_system": 1}
 	if account:
-		or_filters = {"rental_account": account, "is_system": 1}
+		or_filters = {"is_system": 1, "rental_account": account}
 
 	types = frappe.get_all(
 		"Unit Type",
-		filters={"is_active": 1},
-		or_filters=or_filters if or_filters else None,
-		fields=["name", "type_name", "code", "is_system", "display_order"],
+		filters={},
+		or_filters=or_filters,
+		fields=["name", "type_name", "code", "is_system", "is_active",
+			"display_order", "rental_account"],
 		order_by="is_system desc, display_order asc, type_name asc",
 	)
+
+	# Resolve effective is_active per type
+	if account:
+		account_overrides = {}
+		for row in frappe.get_all(
+			"Account Unit Type",
+			filters={"rental_account": account},
+			fields=["unit_type", "is_active"],
+		):
+			account_overrides[row["unit_type"]] = int(row["is_active"] or 0)
+
+		filtered = []
+		for t in types:
+			if int(t.get("is_system") or 0):
+				# System type — use account override if present, else system is_active
+				if t["name"] in account_overrides:
+					effective_active = account_overrides[t["name"]]
+				else:
+					effective_active = int(t.get("is_active") or 0)
+				if effective_active == 1:
+					filtered.append(t)
+			else:
+				# Custom type — use its own is_active
+				if int(t.get("is_active") or 0) == 1:
+					filtered.append(t)
+		types = filtered
+	else:
+		# No account — use system is_active for system types, own is_active for custom
+		types = [t for t in types if int(t.get("is_active") or 0) == 1]
+
 	return {"unitTypes": types}
 
 
 @frappe.whitelist()
 def get_unit_type_attributes_for_unit(unit_type):
-	"""Get active assigned attributes for a unit type, ordered by display_order.
+	"""Get active attributes for a unit type, ordered by display_order.
 
-	Returns attribute metadata needed by the frontend to render dynamic fields.
-	Merged with User Unit Preference overrides if they exist.
+	Returns attribute metadata needed by the frontend to render dynamic
+	fields. Uses the Account Unit Type Attribute configuration for the
+	current account, falling back to the System Default child table when
+	no account customization exists.
 	"""
-	from rental.rental.api.unit_settings import _merge_attribute_override
+	from rental.rental.api.unit_settings import _resolve_account_config, _get_account_or_fallback
+
+	account = _get_account_or_fallback()
+	if not account:
+		return {"attributes": []}
 
 	type_doc = frappe.get_doc("Unit Type", unit_type)
+	if not int(type_doc.is_system or 0):
+		# Non-system types are legacy; return their child table as-is.
+		rows = [
+			{
+				"attribute": row.attribute,
+				"is_required": int(row.is_required or 0),
+				"display_order": int(row.display_order or 0),
+			}
+			for row in type_doc.attributes
+		]
+		has_customization = False
+	else:
+		rows, has_customization = _resolve_account_config(account, unit_type)
+
 	result = []
-	for row in type_doc.attributes:
-		merged = _merge_attribute_override(unit_type, row.attribute, {
-			"is_required": row.is_required,
-			"is_active": row.is_active,
-			"display_order": row.display_order,
-		})
-		if not merged["is_active"]:
-			continue
+	for row in rows:
 		attr = frappe.db.get_value(
-			"Unit Attribute", row.attribute,
+			"Unit Attribute", row["attribute"],
 			["name", "attribute_name", "code", "data_type", "options",
 			 "is_system", "capability_code", "category", "is_active"],
 			as_dict=True,
 		)
-		if not attr or not attr.is_active:
+		if not attr or not int(attr.is_active or 0):
 			continue
 		result.append({
-			"attribute": row.attribute,
+			"attribute": row["attribute"],
 			"attribute_name": attr.attribute_name,
 			"attribute_code": attr.code,
 			"data_type": attr.data_type,
@@ -1102,9 +1152,9 @@ def get_unit_type_attributes_for_unit(unit_type):
 			"is_system": attr.is_system,
 			"capability_code": attr.capability_code or "",
 			"category": attr.category or "",
-			"is_required": merged["is_required"],
-			"display_order": merged["display_order"],
-			"has_override": merged["has_override"],
+			"is_required": int(row.get("is_required") or 0),
+			"display_order": int(row.get("display_order") or 0),
+			"has_customization": has_customization,
 		})
 
 	result.sort(key=lambda x: (x["display_order"], x["attribute_name"]))
@@ -1236,26 +1286,66 @@ def save_unit_attribute_values(unit_name, attribute_values):
 def _validate_required_attributes(unit_type, attribute_values):
 	"""Validate that all required attributes have non-empty values.
 
-	Called by create_unit and update_unit.
-	Respects User Unit Preference overrides for is_required and is_active.
+	Called by create_unit and update_unit. Uses the Account Unit Type
+	Attribute configuration for the current account, falling back to the
+	System Default child table when no account customization exists.
+
+	For Check/Checkbox attributes, 0 and 1 are both valid values — only a
+	missing/null value is considered missing.
 	"""
-	from rental.rental.api.unit_settings import _merge_attribute_override
+	from rental.rental.api.unit_settings import _resolve_account_config, _get_account_or_fallback
 
 	type_doc = frappe.get_doc("Unit Type", unit_type) if unit_type else None
 	if not type_doc:
 		return
 
-	for row in type_doc.attributes:
-		merged = _merge_attribute_override(unit_type, row.attribute, {
-			"is_required": row.is_required,
-			"is_active": row.is_active,
-		})
-		if not merged["is_active"] or not merged["is_required"]:
+	account = _get_account_or_fallback()
+	if not account:
+		return
+
+	if not int(type_doc.is_system or 0):
+		# Legacy non-system type — validate its child table directly.
+		rows = [
+			{
+				"attribute": row.attribute,
+				"is_required": int(row.is_required or 0),
+			}
+			for row in type_doc.attributes
+		]
+	else:
+		rows, _ = _resolve_account_config(account, unit_type)
+
+	# Pre-fetch data types for all required attributes (one query)
+	required_attr_names = [row["attribute"] for row in rows if int(row.get("is_required") or 0)]
+	data_types = {}
+	if required_attr_names:
+		for row in frappe.get_all(
+			"Unit Attribute",
+			filters={"name": ["in", required_attr_names]},
+			fields=["name", "data_type"],
+		):
+			data_types[row["name"]] = row["data_type"]
+
+	for row in rows:
+		if not int(row.get("is_required") or 0):
 			continue
-		attr_name = frappe.db.get_value("Unit Attribute", row.attribute, "attribute_name")
-		val = attribute_values.get(row.attribute)
-		if val is None or val == "" or val == 0:
-			frappe.throw(
-				frappe._("الخاصية '{0}' مطلوبة").format(attr_name),
-				frappe.ValidationError,
-			)
+		attr_name = frappe.db.get_value("Unit Attribute", row["attribute"], "attribute_name")
+		if not attr_name:
+			continue
+		val = attribute_values.get(row["attribute"])
+		data_type = data_types.get(row["attribute"], "")
+
+		# Check/Checkbox: 0 and 1 are both valid — only missing is invalid
+		if data_type == "Check":
+			if val is None or val == "":
+				frappe.throw(
+					frappe._("الخاصية '{0}' مطلوبة").format(attr_name),
+					frappe.ValidationError,
+				)
+		else:
+			# All other types: empty/zero/missing is invalid
+			if val is None or val == "" or val == 0:
+				frappe.throw(
+					frappe._("الخاصية '{0}' مطلوبة").format(attr_name),
+					frappe.ValidationError,
+				)

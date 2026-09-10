@@ -49,7 +49,6 @@ function createAttrDialogState() {
       is_system: details.is_system,
       capability_code: details.capability_code,
       is_required: 0,
-      is_active: 1,
       display_order: draftAttrs.value.length,
     })
     availableAttrs.value = availableAttrs.value.filter(a => a.name !== attrName)
@@ -88,7 +87,7 @@ function createAttrDialogState() {
   }
   function onDragEnd() { dragIndex.value = null; dragOverIndex.value = null }
 
-  // Save (batch)
+  // Save (replace-all)
   async function saveAttrDraft(unitType) {
     attrSaving.value = true
     try {
@@ -97,7 +96,7 @@ function createAttrDialogState() {
         is_required: attr.is_required ? 1 : 0,
         display_order: idx,
       }))
-      await apiCallMock('save_unit_type_attributes', {
+      await apiCallMock('save_account_unit_type_attributes', {
         unit_type: unitType,
         attributes: JSON.stringify(payload),
       })
@@ -125,10 +124,10 @@ function createAttrDialogState() {
 // ========================================================================
 
 const APARTMENT_ATTRS = [
-  { name: 'row-1', attribute: 'attr-rooms', attribute_name: 'عدد الغرف', data_type: 'Integer', is_system: 1, is_required: 1, is_active: 1, display_order: 0, capability_code: '' },
-  { name: 'row-2', attribute: 'attr-bedrooms', attribute_name: 'عدد غرف النوم', data_type: 'Integer', is_system: 1, is_required: 0, is_active: 1, display_order: 1, capability_code: '' },
-  { name: 'row-3', attribute: 'attr-bathrooms', attribute_name: 'عدد الحمامات', data_type: 'Integer', is_system: 1, is_required: 0, is_active: 1, display_order: 2, capability_code: '' },
-  { name: 'row-4', attribute: 'attr-living', attribute_name: 'عدد الصالات', data_type: 'Integer', is_system: 1, is_required: 0, is_active: 1, display_order: 3, capability_code: '' },
+  { attribute: 'attr-rooms', attribute_name: 'عدد الغرف', data_type: 'Integer', is_system: 1, is_required: 1, display_order: 0, capability_code: '' },
+  { attribute: 'attr-bedrooms', attribute_name: 'عدد غرف النوم', data_type: 'Integer', is_system: 1, is_required: 0, display_order: 1, capability_code: '' },
+  { attribute: 'attr-bathrooms', attribute_name: 'عدد الحمامات', data_type: 'Integer', is_system: 1, is_required: 0, display_order: 2, capability_code: '' },
+  { attribute: 'attr-living', attribute_name: 'عدد الصالات', data_type: 'Integer', is_system: 1, is_required: 0, display_order: 3, capability_code: '' },
 ]
 
 const AVAILABLE_ATTRS = [
@@ -167,12 +166,11 @@ describe('Unit Type Attributes DnD UX', () => {
       })
     })
 
-    it('3. Does not expose is_active checkbox in draft UI', () => {
-      // is_active exists in data model but UI template does NOT render a checkbox for it.
-      // The draft items have is_active but it's not toggled by user —
-      // it's preserved by the backend during batch save.
+    it('3. Draft items do not carry is_active (account config has no is_active)', () => {
+      // The new Account Unit Type Attribute model has no is_active field.
+      // Presence/absence of a row signals membership.
       ctx.draftAttrs.value.forEach(attr => {
-        expect(attr.is_active).toBeDefined()
+        expect(attr.is_active).toBeUndefined()
       })
     })
 

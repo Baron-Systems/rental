@@ -295,11 +295,6 @@
         <div v-if="activeTab === 'unit_types'">
           <UnitTypesTab ref="unitTypesTab" />
         </div>
-
-        <!-- Unit attributes tab -->
-        <div v-if="activeTab === 'unit_attributes'">
-          <UnitAttributesTab ref="unitAttributesTab" />
-        </div>
       </div>
     </div>
   </AppLayout>
@@ -310,7 +305,6 @@ import AppLayout from '@/layouts/AppLayout.vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import Card from '@/components/ui/Card.vue'
 import UnitTypesTab from '@/components/settings/UnitTypesTab.vue'
-import UnitAttributesTab from '@/components/settings/UnitAttributesTab.vue'
 import { callApi, extractError } from '@/composables/useApi'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
@@ -323,7 +317,6 @@ const tabs = [
   { key: 'contracts', label: 'إعدادات العقود' },
   { key: 'due_types', label: 'أنواع الالتزامات' },
   { key: 'unit_types', label: 'أنواع الوحدات' },
-  { key: 'unit_attributes', label: 'خصائص الوحدات' },
 ]
 
 const currencies = [
@@ -352,7 +345,6 @@ const dueTypes = ref([])
 const newTypeName = ref('')
 const errors = ref({})
 const unitTypesTab = ref(null)
-const unitAttributesTab = ref(null)
 
 const form = ref({
   landlord_type: 'person', landlord_name: '', landlord_id: '',
