@@ -63,23 +63,28 @@ class RentalUnit(frappe.model.document.Document):
 	def on_trash(self):
 		# Safety net: matches old app canDelete check
 		# (contracts, evictions, dues, receipts)
-		has_history = False
-		if frappe.db.exists("DocType", "Lease Contract"):
-			if frappe.db.count("Lease Contract", {"unit": self.name}):
-				has_history = True
-		if not has_history and frappe.db.exists("DocType", "Eviction"):
-			if frappe.db.count("Eviction", {"unit": self.name}):
-				has_history = True
-		if not has_history and frappe.db.exists("DocType", "Rental Due"):
-			if frappe.db.count("Rental Due", {"unit": self.name}):
-				has_history = True
-		if not has_history and frappe.db.exists("DocType", "Rental Receipt"):
-			if frappe.db.count("Rental Receipt", {"unit": self.name}):
-				has_history = True
-		if has_history:
-			frappe.throw(
-				frappe._("لا يمكن حذف وحدة تحتوي على سجلات استخدام (عقود، إخلاء، مستحقات، أو تحصيلات)")
-			)
+		if self.flags.get("cascade_delete_from_account"):
+			# Skip protection checks for cascade delete
+			# But preserve cleanup logic for Unit Attribute Values
+			pass
+		else:
+			has_history = False
+			if frappe.db.exists("DocType", "Lease Contract"):
+				if frappe.db.count("Lease Contract", {"unit": self.name}):
+					has_history = True
+			if not has_history and frappe.db.exists("DocType", "Eviction"):
+				if frappe.db.count("Eviction", {"unit": self.name}):
+					has_history = True
+			if not has_history and frappe.db.exists("DocType", "Rental Due"):
+				if frappe.db.count("Rental Due", {"unit": self.name}):
+					has_history = True
+			if not has_history and frappe.db.exists("DocType", "Rental Receipt"):
+				if frappe.db.count("Rental Receipt", {"unit": self.name}):
+					has_history = True
+			if has_history:
+				frappe.throw(
+					frappe._("لا يمكن حذف وحدة تحتوي على سجلات استخدام (عقود، إخلاء، مستحقات، أو تحصيلات)")
+				)
 
 		# Unit Attribute Values are owned/dependent data of the unit.
 		# Delete them here (before Frappe's check_if_doc_is_linked runs)
@@ -87,6 +92,7 @@ class RentalUnit(frappe.model.document.Document):
 		# This runs AFTER the business-dependency checks above, so if the
 		# unit has contracts/dues/receipts/evictions, we throw before
 		# touching any attribute values — no partial delete.
+		# This cleanup is preserved for both normal deletion and cascade delete.
 		attr_values = frappe.db.get_all(
 			"Unit Attribute Value",
 			filters={"unit": self.name},

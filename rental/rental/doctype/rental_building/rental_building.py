@@ -53,6 +53,8 @@ class RentalBuilding(frappe.model.document.Document):
 	def on_trash(self):
 		# Order matches old app: contracts → dues → receipts → units
 		# (floors are caught implicitly by FK restrict if no other data exists)
+		if self.flags.get("cascade_delete_from_account"):
+			return  # Skip protection for cascade delete
 		if frappe.db.exists("DocType", "Lease Contract"):
 			contract_count = frappe.db.count("Lease Contract", {"building": self.name})
 			if contract_count:

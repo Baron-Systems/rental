@@ -88,6 +88,8 @@ class LeaseContract(Document):
 
 	def on_trash(self):
 		"""Only draft contracts can be deleted."""
+		if self.flags.get("cascade_delete_from_account"):
+			return  # Skip protection for cascade delete
 		if self.status != "draft":
 			frappe.throw(frappe._("لا يمكن حذف العقد بعد الاعتماد"))
 		if self.is_archived:

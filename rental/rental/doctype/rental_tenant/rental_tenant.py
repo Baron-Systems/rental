@@ -87,6 +87,8 @@ class RentalTenant(Document):
 
 		Source: TEN-BE-004, TEN-BE-005.
 		"""
+		if self.flags.get("cascade_delete_from_account"):
+			return  # Skip protection for cascade delete
 		can_delete, error_message = can_delete_tenant(self.name)
 		if not can_delete:
 			frappe.throw(frappe._(error_message), title=frappe._("تعذر الحذف"))

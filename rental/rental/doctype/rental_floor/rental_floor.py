@@ -55,6 +55,8 @@ class RentalFloor(frappe.model.document.Document):
 
 	def on_trash(self):
 		# Order matches old app: rented units → contracts on floor's units → any units
+		if self.flags.get("cascade_delete_from_account"):
+			return  # Skip protection for cascade delete
 		rented_units = frappe.db.count("Rental Unit", {"floor": self.name, "status": "rented"})
 		if rented_units:
 			frappe.throw(

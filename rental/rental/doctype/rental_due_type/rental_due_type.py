@@ -45,6 +45,8 @@ class RentalDueType(Document):
 				)
 
 	def on_trash(self):
+		if self.flags.get("cascade_delete_from_account"):
+			return  # Skip protection for cascade delete
 		if self.is_system:
 			account = get_current_rental_account()
 			if account is not None:
