@@ -406,7 +406,7 @@ import { useConfirm } from '@/composables/useConfirm'
 const session = useSession()
 const router = useRouter()
 const toast = useToast()
-const { confirm } = useConfirm()
+const { confirm, prompt } = useConfirm()
 
 const currency = computed(() => session.state.account?.settings?.currency || 'ILS')
 
@@ -1005,7 +1005,12 @@ async function approveDue(d) {
 }
 
 async function cancelDue(d) {
-  const reason = prompt('سبب الإلغاء:')
+  const reason = await prompt({
+    title: 'إلغاء الالتزام',
+    message: 'أدخل سبب إلغاء الالتزام',
+    inputLabel: 'سبب الإلغاء',
+    variant: 'warning',
+  })
   if (!reason) return
   try {
     await callApi('rental.rental.api.due.cancel_due_api', { name: d.name, reason })

@@ -196,7 +196,7 @@ const router = useRouter()
 const route = useRoute()
 const session = useSession()
 const toast = useToast()
-const { confirm } = useConfirm()
+const { confirm, prompt } = useConfirm()
 
 const currency = computed(() => session.state.account?.settings?.currency || 'ILS')
 
@@ -442,7 +442,12 @@ async function approveDue() {
 }
 
 async function cancelDue() {
-  const reason = prompt('سبب الإلغاء:')
+  const reason = await prompt({
+    title: 'إلغاء الالتزام',
+    message: 'أدخل سبب إلغاء الالتزام',
+    inputLabel: 'سبب الإلغاء',
+    variant: 'warning',
+  })
   if (!reason) return
   try {
     await callApi('rental.rental.api.due.cancel_due_api', { name: due.value.name, reason })
@@ -477,7 +482,12 @@ async function createWaiver() {
 }
 
 async function cancelWaiver(w) {
-  const reason = prompt('سبب إلغاء الإعفاء:')
+  const reason = await prompt({
+    title: 'إلغاء الإعفاء',
+    message: 'أدخل سبب إلغاء الإعفاء',
+    inputLabel: 'سبب الإلغاء',
+    variant: 'warning',
+  })
   if (!reason) return
   try {
     await callApi('rental.rental.api.due.cancel_waiver', { due_name: due.value.name, waiver_name: w.name, reason })
