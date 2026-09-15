@@ -11,7 +11,7 @@
       <svg v-if="!(modelValue && clearable)" class="w-4 h-4 text-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
     </button>
 
-    <input v-if="required && !modelValue" type="hidden" required :value="modelValue" />
+    <!-- Custom validation is handled by parent component; no hidden required input to avoid browser native validation -->
 
     <div v-if="open" class="absolute z-30 mt-1 w-full card-premium overflow-hidden">
       <div class="p-2 border-b border-ivory-300/60 relative">

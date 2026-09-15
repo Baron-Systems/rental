@@ -18,11 +18,11 @@
       <!-- Card -->
       <div class="card-premium p-8">
         <form @submit.prevent="handleLogin" class="space-y-5">
-          <FormField label="البريد الإلكتروني" required>
-            <input v-model="email" type="email" dir="ltr" required class="input-premium" placeholder="example@email.com" />
+          <FormField label="البريد الإلكتروني" required :error="errors.email">
+            <input v-model="email" type="text" dir="ltr" class="input-premium" placeholder="example@email.com" @input="errors.email = ''" />
           </FormField>
-          <FormField label="كلمة المرور" required>
-            <input v-model="password" type="password" dir="ltr" required class="input-premium" placeholder="••••••••" />
+          <FormField label="كلمة المرور" required :error="errors.password">
+            <input v-model="password" type="password" dir="ltr" class="input-premium" placeholder="••••••••" @input="errors.password = ''" />
           </FormField>
 
           <div v-if="error" class="text-red-600 text-sm bg-red-50 border border-red-200 px-4 py-3 rounded-xl flex items-center gap-2">
@@ -54,8 +54,28 @@ const email = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
+const errors = ref({ email: '', password: '' })
+
+function validateLogin() {
+  errors.value = { email: '', password: '' }
+  let valid = true
+  const e = email.value.trim()
+  if (!e) {
+    errors.value.email = 'البريد الإلكتروني مطلوب'
+    valid = false
+  } else if (!e.includes('@') || !e.includes('.')) {
+    errors.value.email = 'صيغة البريد الإلكتروني غير صالحة'
+    valid = false
+  }
+  if (!password.value) {
+    errors.value.password = 'كلمة المرور مطلوبة'
+    valid = false
+  }
+  return valid
+}
 
 async function handleLogin() {
+  if (!validateLogin()) return
   loading.value = true
   error.value = ''
   try {

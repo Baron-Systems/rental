@@ -15,11 +15,11 @@
               البيانات الأساسية
             </h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <FormField label="الاسم الكامل" required>
-                <input v-model="form.full_name" type="text" required maxlength="100" class="input-premium" placeholder="الاسم الكامل" />
+              <FormField label="الاسم الكامل" required :error="errors.full_name">
+                <input v-model="form.full_name" type="text" maxlength="100" class="input-premium" placeholder="الاسم الكامل" @input="errors.full_name = ''" />
               </FormField>
-              <FormField label="رقم الهوية" required>
-                <input v-model="form.national_id" type="text" required maxlength="50" class="input-premium" placeholder="رقم الهوية" />
+              <FormField label="رقم الهوية" required :error="errors.national_id">
+                <input v-model="form.national_id" type="text" maxlength="50" class="input-premium" placeholder="رقم الهوية" @input="errors.national_id = ''" />
               </FormField>
               <FormField label="رقم الهاتف">
                 <input v-model="form.phone" type="tel" dir="ltr" maxlength="20" class="input-premium" placeholder="رقم الهاتف" />
@@ -73,6 +73,7 @@ const router = useRouter()
 
 const saving = ref(false)
 const error = ref('')
+const errors = ref({ full_name: '', national_id: '' })
 
 const form = ref({
   full_name: '', national_id: '', phone: '',
@@ -83,7 +84,22 @@ function cancel() {
   router.push({ name: 'Tenants' })
 }
 
+function validateTenant() {
+  errors.value = { full_name: '', national_id: '' }
+  let valid = true
+  if (!form.value.full_name.trim()) {
+    errors.value.full_name = 'الاسم الكامل مطلوب'
+    valid = false
+  }
+  if (!form.value.national_id.trim()) {
+    errors.value.national_id = 'رقم الهوية مطلوب'
+    valid = false
+  }
+  return valid
+}
+
 async function save() {
+  if (!validateTenant()) return
   saving.value = true
   error.value = ''
   try {

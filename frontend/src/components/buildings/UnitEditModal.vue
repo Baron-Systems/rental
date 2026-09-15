@@ -2,11 +2,11 @@
   <Modal :model-value="true" title="تعديل وحدة" size="lg" @update:model-value="$emit('close')">
     <form @submit.prevent="save" class="space-y-4">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FormField label="رقم الوحدة" required>
-          <input v-model="form.unit_number" type="text" required placeholder="101" class="input-premium" :disabled="!editableFields.includes('unit_number')" :class="{ 'opacity-60': !editableFields.includes('unit_number') }" />
+        <FormField label="رقم الوحدة" required :error="errors.unit_number">
+          <input v-model="form.unit_number" type="text" placeholder="101" class="input-premium" :disabled="!editableFields.includes('unit_number')" :class="{ 'opacity-60': !editableFields.includes('unit_number') }" @input="errors.unit_number = ''" />
         </FormField>
-        <FormField label="نوع الوحدة">
-          <select v-model="form.unit_type" required class="input-premium" @change="onUnitTypeChange">
+        <FormField label="نوع الوحدة" :error="errors.unit_type">
+          <select v-model="form.unit_type" class="input-premium" @change="onUnitTypeChange; errors.unit_type = ''">
             <option value="">— اختر —</option>
             <option v-for="t in unitTypes" :key="t.name" :value="t.name">{{ t.type_name }}</option>
             <!-- Include current type even if disabled -->
@@ -91,6 +91,21 @@ const saving = ref(false)
 const unitTypes = ref([])
 const attrFields = ref(null)
 const attrsReady = ref(false)
+const errors = ref({ unit_number: '', unit_type: '' })
+
+function validateUnitEdit() {
+  errors.value = { unit_number: '', unit_type: '' }
+  let valid = true
+  if (!form.value.unit_number.trim()) {
+    errors.value.unit_number = 'رقم الوحدة مطلوب'
+    valid = false
+  }
+  if (!form.value.unit_type) {
+    errors.value.unit_type = 'نوع الوحدة مطلوب'
+    valid = false
+  }
+  return valid
+}
 
 // Existing attribute values loaded from backend (preserving 0, false, etc.)
 const existingAttrValues = ref({})
@@ -185,6 +200,7 @@ onMounted(async () => {
 })
 
 async function save() {
+  if (!validateUnitEdit()) return
   saving.value = true
   try {
     const payload = { name: props.unit.name, ...form.value }

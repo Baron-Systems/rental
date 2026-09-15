@@ -67,11 +67,13 @@
             <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div class="space-y-1.5">
                 <label class="text-sm font-medium text-navy-800">تاريخ القبض <span class="text-red-500">*</span></label>
-                <input type="date" dir="ltr" class="input-premium" v-model="editForm.receiptDate" required />
+                <input type="date" dir="ltr" class="input-premium" v-model="editForm.receiptDate" @change="errors.receiptDate = ''" />
+                <p v-if="errors.receiptDate" class="text-xs text-red-600">{{ errors.receiptDate }}</p>
               </div>
               <div class="space-y-1.5">
                 <label class="text-sm font-medium text-navy-800">المبلغ <span class="text-red-500">*</span></label>
-                <input type="number" step="0.01" placeholder="المبلغ" class="input-premium" v-model="editForm.amount" required />
+                <input type="number" step="0.01" placeholder="المبلغ" class="input-premium" v-model="editForm.amount" @input="errors.amount = ''" />
+                <p v-if="errors.amount" class="text-xs text-red-600">{{ errors.amount }}</p>
               </div>
               <div class="space-y-1.5">
                 <label class="text-sm font-medium text-navy-800">طريقة الدفع</label>
@@ -83,7 +85,8 @@
               <template v-if="editForm.paymentMethod === 'cheque'">
                 <div class="space-y-1.5">
                   <label class="text-sm font-medium text-navy-800">رقم الشيك <span class="text-red-500">*</span></label>
-                  <input type="text" placeholder="رقم الشيك" class="input-premium" v-model="editForm.referenceNumber" required />
+                  <input type="text" placeholder="رقم الشيك" class="input-premium" v-model="editForm.referenceNumber" @input="errors.referenceNumber = ''" />
+                  <p v-if="errors.referenceNumber" class="text-xs text-red-600">{{ errors.referenceNumber }}</p>
                 </div>
                 <div class="space-y-1.5">
                   <label class="text-sm font-medium text-navy-800">تاريخ الشيك</label>
@@ -213,6 +216,8 @@ const editMode = ref(false)
 const editError = ref('')
 const attachmentPreviewOpen = ref(false)
 
+const errors = ref({ receiptDate: '', amount: '', referenceNumber: '' })
+
 const editForm = reactive({
   receiptDate: '',
   amount: '',
@@ -223,6 +228,24 @@ const editForm = reactive({
   attachment: null,
   notes: '',
 })
+
+function validateReceiptEdit() {
+  errors.value = { receiptDate: '', amount: '', referenceNumber: '' }
+  let valid = true
+  if (!editForm.receiptDate) {
+    errors.value.receiptDate = 'تاريخ القبض مطلوب'
+    valid = false
+  }
+  if (!editForm.amount || isNaN(parseFloat(editForm.amount)) || parseFloat(editForm.amount) <= 0) {
+    errors.value.amount = 'المبلغ مطلوب ويجب أن يكون أكبر من صفر'
+    valid = false
+  }
+  if (editForm.paymentMethod === 'cheque' && !editForm.referenceNumber.trim()) {
+    errors.value.referenceNumber = 'رقم الشيك مطلوب'
+    valid = false
+  }
+  return valid
+}
 
 const infoItems = computed(() => {
   if (!receipt.value) return []
@@ -344,6 +367,7 @@ function startEdit() {
 }
 
 async function handleEditSubmit() {
+  if (!validateReceiptEdit()) return
   editError.value = ''
   try {
     const payload = {

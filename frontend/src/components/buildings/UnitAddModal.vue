@@ -2,16 +2,15 @@
   <Modal :model-value="true" title="إضافة وحدة" size="lg" @update:model-value="$emit('close')">
     <form @submit.prevent="save" class="space-y-4">
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FormField label="رقم الوحدة" required>
-          <input v-model="form.unit_number" type="text" required placeholder="101" class="input-premium" />
+        <FormField label="رقم الوحدة" required :error="errors.unit_number">
+          <input v-model="form.unit_number" type="text" placeholder="101" class="input-premium" @input="errors.unit_number = ''" />
         </FormField>
-        <FormField label="نوع الوحدة" required :error="unitTypeError">
+        <FormField label="نوع الوحدة" required :error="unitTypeError || errors.unit_type">
           <select
             ref="unitTypeSelect"
             v-model="form.unit_type"
-            required
             class="input-premium"
-            :class="{ 'border-red-500': unitTypeError }"
+            :class="{ 'border-red-500': unitTypeError || errors.unit_type }"
             @change="onUnitTypeChange"
           >
             <option value="">— اختر —</option>
@@ -89,6 +88,21 @@ const saving = ref(false)
 const unitTypes = ref([])
 const unitTypeError = ref('')
 const unitTypeSelect = ref(null)
+const errors = ref({ unit_number: '', unit_type: '' })
+
+function validateUnitAdd() {
+  errors.value = { unit_number: '', unit_type: '' }
+  let valid = true
+  if (!form.value.unit_number.trim()) {
+    errors.value.unit_number = 'رقم الوحدة مطلوب'
+    valid = false
+  }
+  if (!form.value.unit_type) {
+    errors.value.unit_type = 'نوع الوحدة مطلوب'
+    valid = false
+  }
+  return valid
+}
 const attrValues = ref({})
 const meterForm = ref({
   electricity_meter_number: '',
@@ -130,10 +144,8 @@ onMounted(() => {
 })
 
 async function save() {
-  // Frontend validation: unit_type is required before sending to backend
-  if (!form.value.unit_type) {
-    unitTypeError.value = 'نوع الوحدة مطلوب'
-    unitTypeSelect.value?.focus()
+  if (!validateUnitAdd()) {
+    if (errors.value.unit_type) unitTypeSelect.value?.focus()
     return
   }
   saving.value = true

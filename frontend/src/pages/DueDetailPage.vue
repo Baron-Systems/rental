@@ -69,28 +69,28 @@
           <div v-if="editError" class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ editError }}</div>
           <form @submit.prevent="saveEdit" class="space-y-3">
             <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <FormField label="تاريخ الاستحقاق" required>
-                <input v-model="editForm.due_date" type="date" dir="ltr" required class="input-premium" />
+              <FormField label="تاريخ الاستحقاق" required :error="errors.due_date">
+                <input v-model="editForm.due_date" type="date" dir="ltr" class="input-premium" @change="errors.due_date = ''" />
               </FormField>
               <template v-if="isMeterDue(due)">
                 <FormField label="القراءة السابقة">
                   <input :value="editForm.previous_meter_reading" type="text" readonly class="input-premium bg-ivory-100" />
                 </FormField>
-                <FormField label="القراءة الحالية" required>
-                  <input :value="editForm.current_meter_reading" @input="handleEditMeterInput($event.target.value, editForm.unit_price)" type="number" step="0.01" required class="input-premium" />
+                <FormField label="القراءة الحالية" required :error="errors.current_meter_reading">
+                  <input :value="editForm.current_meter_reading" @input="handleEditMeterInput($event.target.value, editForm.unit_price); errors.current_meter_reading = ''" type="number" step="0.01" class="input-premium" />
                 </FormField>
                 <FormField label="الاستهلاك">
                   <input :value="editForm.meter_consumption" type="text" readonly class="input-premium bg-ivory-100" />
                 </FormField>
-                <FormField label="سعر الوحدة" required>
-                  <input :value="editForm.unit_price" @input="handleEditMeterInput(editForm.current_meter_reading, $event.target.value)" type="number" step="0.01" required class="input-premium" />
+                <FormField label="سعر الوحدة" required :error="errors.unit_price">
+                  <input :value="editForm.unit_price" @input="handleEditMeterInput(editForm.current_meter_reading, $event.target.value); errors.unit_price = ''" type="number" step="0.01" class="input-premium" />
                 </FormField>
                 <FormField label="المبلغ (تلقائي)">
                   <input :value="editForm.amount" type="text" readonly class="input-premium bg-ivory-100" />
                 </FormField>
               </template>
-              <FormField v-else label="المبلغ" required>
-                <input v-model="editForm.amount" type="number" step="0.01" required class="input-premium" />
+              <FormField v-else label="المبلغ" required :error="errors.amount">
+                <input v-model="editForm.amount" type="number" step="0.01" class="input-premium" @input="errors.amount = ''" />
               </FormField>
               <FormField label="الوصف (اختياري)">
                 <input v-model="editForm.description" type="text" class="input-premium" />
@@ -123,11 +123,11 @@
           <h3 class="text-base font-semibold text-navy-900 mb-3">إضافة إعفاء</h3>
           <form @submit.prevent="createWaiver">
             <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <FormField label="مبلغ الإعفاء" required>
-                <input v-model="waiverForm.amount" type="number" step="0.01" required class="input-premium" />
+              <FormField label="مبلغ الإعفاء" required :error="errors.waiver_amount">
+                <input v-model="waiverForm.amount" type="number" step="0.01" class="input-premium" @input="errors.waiver_amount = ''" />
               </FormField>
-              <FormField label="سبب الإعفاء" required>
-                <input v-model="waiverForm.reason" type="text" required class="input-premium" />
+              <FormField label="سبب الإعفاء" required :error="errors.waiver_reason">
+                <input v-model="waiverForm.reason" type="text" class="input-premium" @input="errors.waiver_reason = ''" />
               </FormField>
             </div>
             <div class="mt-4 flex gap-2">
@@ -214,6 +214,47 @@ const waiverError = ref('')
 const editForm = ref({ amount: '', due_date: '', description: '', previous_meter_reading: '', current_meter_reading: '', meter_consumption: '', unit_price: '' })
 
 const waiverForm = ref({ amount: '', reason: '' })
+
+const errors = ref({ due_date: '', current_meter_reading: '', unit_price: '', amount: '', waiver_amount: '', waiver_reason: '' })
+
+function validateEditForm() {
+  errors.value = { due_date: '', current_meter_reading: '', unit_price: '', amount: '', waiver_amount: '', waiver_reason: '' }
+  let valid = true
+  if (!editForm.value.due_date) {
+    errors.value.due_date = 'تاريخ الاستحقاق مطلوب'
+    valid = false
+  }
+  if (isMeterDue(due.value)) {
+    if (!editForm.value.current_meter_reading || isNaN(parseFloat(editForm.value.current_meter_reading))) {
+      errors.value.current_meter_reading = 'القراءة الحالية مطلوبة'
+      valid = false
+    }
+    if (!editForm.value.unit_price || isNaN(parseFloat(editForm.value.unit_price))) {
+      errors.value.unit_price = 'سعر الوحدة مطلوب'
+      valid = false
+    }
+  } else {
+    if (!editForm.value.amount || isNaN(parseFloat(editForm.value.amount))) {
+      errors.value.amount = 'المبلغ مطلوب'
+      valid = false
+    }
+  }
+  return valid
+}
+
+function validateWaiverForm() {
+  errors.value = { ...errors.value, waiver_amount: '', waiver_reason: '' }
+  let valid = true
+  if (!waiverForm.value.amount || isNaN(parseFloat(waiverForm.value.amount))) {
+    errors.value.waiver_amount = 'مبلغ الإعفاء مطلوب'
+    valid = false
+  }
+  if (!waiverForm.value.reason.trim()) {
+    errors.value.waiver_reason = 'سبب الإعفاء مطلوب'
+    valid = false
+  }
+  return valid
+}
 
 // ---- Helpers (source: dues/[id]/page.tsx:62-69, 150-161, 262-273) ----
 
@@ -361,6 +402,7 @@ function handleEditMeterInput(curr, price) {
 }
 
 async function saveEdit() {
+  if (!validateEditForm()) return
   savingEdit.value = true
   editError.value = ''
   try {
@@ -420,6 +462,7 @@ async function deleteDue() {
 }
 
 async function createWaiver() {
+  if (!validateWaiverForm()) return
   waiverError.value = ''
   savingWaiver.value = true
   try {

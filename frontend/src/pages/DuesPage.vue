@@ -63,7 +63,7 @@
                   <!-- Contract (source: page.tsx:1022-1040) -->
                   <div class="space-y-1.5">
                     <label class="text-sm font-medium text-navy-800">العقد <span class="text-red-500">*</span></label>
-                    <select :value="newDue.contract" @change="handleContractChange($event.target.value)" class="input-premium" :disabled="!newDue.tenantId" required>
+                    <select :value="newDue.contract" @change="handleContractChange($event.target.value)" class="input-premium" :disabled="!newDue.tenantId">
                       <option value="">{{ newDue.tenantId ? 'اختر العقد *' : 'اختر المستأجر أولاّ' }}</option>
                       <option v-for="c in formContracts" :key="c.name" :value="c.name">{{ formatContractOptionLabel(c) }}</option>
                     </select>
@@ -76,7 +76,7 @@
                   <!-- Due type (source: page.tsx:1042-1065) -->
                   <div class="space-y-1.5">
                     <label class="text-sm font-medium text-navy-800">نوع الالتزام <span class="text-red-500">*</span></label>
-                    <select :value="newDue.due_type" @change="handleDueTypeChange($event.target.value)" class="input-premium" :disabled="!newDue.contract" required>
+                    <select :value="newDue.due_type" @change="handleDueTypeChange($event.target.value)" class="input-premium" :disabled="!newDue.contract">
                       <option value="">{{ newDue.contract ? (formMode === 'contractual' ? 'اختر نوع الالتزام *' : 'اختر نوع إضافي *') : 'اختر العقد أولاّ' }}</option>
                       <option v-for="opt in dueTypeOptions" :key="opt.value" :value="opt.value" :disabled="opt.disabled">{{ opt.label }}</option>
                     </select>
@@ -91,7 +91,7 @@
                   <!-- Date (source: page.tsx:1067-1078) -->
                   <div class="space-y-1.5">
                     <label class="text-sm font-medium text-navy-800">التاريخ <span class="text-red-500">*</span></label>
-                    <input v-model="newDue.due_date" type="date" dir="ltr" class="input-premium" required />
+                    <input v-model="newDue.due_date" type="date" dir="ltr" class="input-premium" />
                   </div>
 
                   <!-- Metered fields (source: page.tsx:1080-1138) -->
@@ -105,7 +105,7 @@
                         </div>
                         <div class="space-y-1.5">
                           <label class="text-xs text-navy-400">القراءة الحالية <span class="text-red-500">*</span></label>
-                          <input :value="newDue.current_meter_reading" @input="handleMeterInput($event.target.value, newDue.unit_price)" type="number" step="0.01" placeholder="أدخل القراءة الجديدة" class="input-premium" required />
+                          <input :value="newDue.current_meter_reading" @input="handleMeterInput($event.target.value, newDue.unit_price)" type="number" step="0.01" placeholder="أدخل القراءة الجديدة" class="input-premium" />
                         </div>
                         <div class="space-y-1.5">
                           <label class="text-xs text-navy-400">الاستهلاك</label>
@@ -113,7 +113,7 @@
                         </div>
                         <div class="space-y-1.5">
                           <label class="text-xs text-navy-400">سعر الوحدة <span class="text-red-500">*</span></label>
-                          <input :value="newDue.unit_price" @input="handleMeterInput(newDue.current_meter_reading, $event.target.value)" type="number" step="0.01" placeholder="مثال: 0.15" class="input-premium" required />
+                          <input :value="newDue.unit_price" @input="handleMeterInput(newDue.current_meter_reading, $event.target.value)" type="number" step="0.01" placeholder="مثال: 0.15" class="input-premium" />
                         </div>
                         <div class="space-y-1.5 sm:col-span-2">
                           <label class="text-xs text-navy-400">المبلغ (تلقائي)</label>
@@ -127,7 +127,7 @@
                   <template v-else>
                     <div class="space-y-1.5">
                       <label class="text-sm font-medium text-navy-800">المبلغ <span class="text-red-500">*</span></label>
-                      <input v-model="newDue.amount" type="number" step="0.01" placeholder="أدخل المبلغ" class="input-premium" required />
+                      <input v-model="newDue.amount" type="number" step="0.01" placeholder="أدخل المبلغ" class="input-premium" />
                     </div>
                   </template>
 
@@ -176,7 +176,7 @@
           <div>
             <label class="mb-1.5 block text-xs font-semibold text-navy-400">بيانات الالتزام</label>
             <div class="grid grid-cols-1 gap-2 md:grid-cols-3">
-              <input v-model="editForm.due_date" type="date" dir="ltr" class="input-premium" required />
+              <input v-model="editForm.due_date" type="date" dir="ltr" class="input-premium" />
 
               <template v-if="editForm.is_metered">
                 <div class="col-span-1 md:col-span-3 rounded-lg border border-ivory-300 bg-ivory-100/40 p-2">
@@ -188,7 +188,7 @@
                     </div>
                     <div class="flex flex-col gap-1">
                       <label class="text-xs text-navy-400">القراءة الحالية *</label>
-                      <input :value="editForm.current_meter_reading" @input="handleEditMeterInput($event.target.value, editForm.unit_price)" type="number" step="0.01" placeholder="القراءة الحالية *" class="input-premium" required />
+                      <input :value="editForm.current_meter_reading" @input="handleEditMeterInput($event.target.value, editForm.unit_price)" type="number" step="0.01" placeholder="القراءة الحالية *" class="input-premium" />
                     </div>
                     <div class="flex flex-col gap-1">
                       <label class="text-xs text-navy-400">الاستهلاك</label>
@@ -196,7 +196,7 @@
                     </div>
                     <div class="flex flex-col gap-1">
                       <label class="text-xs text-navy-400">سعر الوحدة *</label>
-                      <input :value="editForm.unit_price" @input="handleEditMeterInput(editForm.current_meter_reading, $event.target.value)" type="number" step="0.01" placeholder="سعر الوحدة *" class="input-premium" required />
+                      <input :value="editForm.unit_price" @input="handleEditMeterInput(editForm.current_meter_reading, $event.target.value)" type="number" step="0.01" placeholder="سعر الوحدة *" class="input-premium" />
                     </div>
                     <div class="flex flex-col gap-1">
                       <label class="text-xs text-navy-400">المبلغ (تلقائي)</label>
@@ -206,7 +206,7 @@
                 </div>
               </template>
               <template v-else>
-                <input v-model="editForm.amount" type="number" step="0.01" placeholder="المبلغ *" class="input-premium" required />
+                <input v-model="editForm.amount" type="number" step="0.01" placeholder="المبلغ *" class="input-premium" />
               </template>
 
               <input

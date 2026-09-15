@@ -3,11 +3,11 @@
     <form @submit.prevent="save" class="space-y-4">
       <!-- Create mode: full form -->
       <template v-if="!building">
-        <FormField label="اسم العقار" required>
-          <input v-model="form.building_name" type="text" required placeholder="اسم العقار *" class="input-premium" />
+        <FormField label="اسم العقار" required :error="errors.building_name">
+          <input v-model="form.building_name" type="text" placeholder="اسم العقار *" class="input-premium" @input="errors.building_name = ''" />
         </FormField>
-        <FormField label="العنوان" required>
-          <textarea v-model="form.address" rows="2" required placeholder="العنوان *" class="input-premium"></textarea>
+        <FormField label="العنوان" required :error="errors.address">
+          <textarea v-model="form.address" rows="2" placeholder="العنوان *" class="input-premium" @input="errors.address = ''"></textarea>
         </FormField>
       </template>
 
@@ -57,8 +57,24 @@ const form = ref({
   is_active: props.building?.is_active ?? 1,
 })
 const saving = ref(false)
+const errors = ref({ building_name: '', address: '' })
+
+function validateBuilding() {
+  errors.value = { building_name: '', address: '' }
+  let valid = true
+  if (!props.building && !form.value.building_name.trim()) {
+    errors.value.building_name = 'اسم العقار مطلوب'
+    valid = false
+  }
+  if (!props.building && !form.value.address.trim()) {
+    errors.value.address = 'العنوان مطلوب'
+    valid = false
+  }
+  return valid
+}
 
 async function save() {
+  if (!validateBuilding()) return
   saving.value = true
   try {
     if (props.building) {

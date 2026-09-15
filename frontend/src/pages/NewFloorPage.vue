@@ -8,14 +8,14 @@
 
       <Card padding="lg">
         <form @submit.prevent="save" class="space-y-5">
-          <FormField label="العقار" required>
-            <select v-model="form.building" required class="input-premium">
+          <FormField label="العقار" required :error="errors.building">
+            <select v-model="form.building" class="input-premium" @change="errors.building = ''">
               <option value="">اختر العقار *</option>
               <option v-for="b in buildings" :key="b.name" :value="b.name">{{ b.building_name }}</option>
             </select>
           </FormField>
-          <FormField label="اسم الطابق" required>
-            <input v-model="form.floor_name" type="text" required class="input-premium" placeholder="اسم الطابق *" />
+          <FormField label="اسم الطابق" required :error="errors.floor_name">
+            <input v-model="form.floor_name" type="text" class="input-premium" placeholder="اسم الطابق *" @input="errors.floor_name = ''" />
           </FormField>
           <FormField label="ترتيب العرض">
             <input v-model.number="form.sort_order" type="number" dir="ltr" class="input-premium" placeholder="ترتيب العرض" />
@@ -55,7 +55,22 @@ const toast = useToast()
 const buildings = ref([])
 const saving = ref(false)
 const error = ref('')
+const errors = ref({ building: '', floor_name: '' })
 const form = ref({ building: '', floor_name: '', sort_order: 0 })
+
+function validateFloorPage() {
+  errors.value = { building: '', floor_name: '' }
+  let valid = true
+  if (!form.value.building) {
+    errors.value.building = 'يجب اختيار العقار'
+    valid = false
+  }
+  if (!form.value.floor_name.trim()) {
+    errors.value.floor_name = 'اسم الطابق مطلوب'
+    valid = false
+  }
+  return valid
+}
 
 async function loadBuildings() {
   try {
@@ -65,6 +80,7 @@ async function loadBuildings() {
 }
 
 async function save() {
+  if (!validateFloorPage()) return
   saving.value = true
   error.value = ''
   try {

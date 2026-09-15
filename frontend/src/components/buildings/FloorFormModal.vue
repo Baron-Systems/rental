@@ -1,8 +1,8 @@
 <template>
   <Modal :model-value="true" title="إضافة طابق" size="sm" @update:model-value="$emit('close')">
     <form @submit.prevent="save" class="space-y-4">
-      <FormField label="اسم الطابق" required>
-        <input v-model="form.floor_name" type="text" required placeholder="اسم الطابق *" class="input-premium" />
+      <FormField label="اسم الطابق" required :error="errors.floor_name">
+        <input v-model="form.floor_name" type="text" placeholder="اسم الطابق *" class="input-premium" @input="errors.floor_name = ''" />
       </FormField>
     </form>
     <template #footer>
@@ -38,8 +38,19 @@ const form = ref({
   building: props.buildingName,
 })
 const saving = ref(false)
+const errors = ref({ floor_name: '' })
+
+function validateFloor() {
+  errors.value.floor_name = ''
+  if (!form.value.floor_name.trim()) {
+    errors.value.floor_name = 'اسم الطابق مطلوب'
+    return false
+  }
+  return true
+}
 
 async function save() {
+  if (!validateFloor()) return
   saving.value = true
   try {
     await frappeRequest({

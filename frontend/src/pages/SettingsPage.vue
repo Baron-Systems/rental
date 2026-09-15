@@ -233,7 +233,8 @@
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="space-y-1">
                   <label class="text-xs font-medium text-navy-500">عدد الأيام للتنبيه قبل انتهاء العقد</label>
-                  <input v-model.number="contractForm.contract_alert_days" type="number" min="0" placeholder="30" class="input-premium" />
+                  <input v-model.number="contractForm.contract_alert_days" type="number" placeholder="30" class="input-premium" @input="errors.contract_alert_days = ''" />
+                  <p v-if="errors.contract_alert_days" class="text-xs text-red-600">{{ errors.contract_alert_days }}</p>
                 </div>
                 <div class="space-y-1 md:col-span-2">
                   <label class="text-xs font-medium text-navy-500">الشروط والأحكام الافتراضية للعقد</label>
@@ -345,6 +346,17 @@ const dueTypes = ref([])
 const newTypeName = ref('')
 const errors = ref({})
 const unitTypesTab = ref(null)
+
+function validateContractSettings() {
+  errors.value = { ...errors.value, contract_alert_days: '' }
+  let valid = true
+  const days = contractForm.value.contract_alert_days
+  if (days === '' || days === null || days === undefined || isNaN(Number(days)) || Number(days) < 0) {
+    errors.value.contract_alert_days = 'يجب أن يكون العدد 0 أو أكبر'
+    valid = false
+  }
+  return valid
+}
 
 const form = ref({
   landlord_type: 'person', landlord_name: '', landlord_id: '',
@@ -513,6 +525,7 @@ async function saveGeneral(confirmed = false) {
 }
 
 async function saveContractSettings() {
+  if (!validateContractSettings()) return
   savingContract.value = true
   try {
     await callApi('rental.rental.api.settings.update_settings', { ...contractForm.value })
