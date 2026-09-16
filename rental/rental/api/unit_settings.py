@@ -46,20 +46,61 @@ def _get_account_or_fallback() -> str | None:
 	return accounts[0]["name"]
 
 
+def _ensure_account_unit_type_flag(account: str, unit_type: str, has_custom_attributes: int) -> None:
+	"""Ensure an Account Unit Type row exists with the given has_custom_attributes flag."""
+	existing = frappe.db.get_value(
+		"Account Unit Type",
+		{"rental_account": account, "unit_type": unit_type},
+		"name",
+	)
+	if existing:
+		doc = frappe.get_doc("Account Unit Type", existing)
+		doc.has_custom_attributes = has_custom_attributes
+		doc.flags.ignore_version = True
+		doc.save(ignore_permissions=True)
+	else:
+		frappe.get_doc({
+			"doctype": "Account Unit Type",
+			"rental_account": account,
+			"unit_type": unit_type,
+			"is_active": 1,
+			"has_custom_attributes": has_custom_attributes,
+		}).insert(ignore_permissions=True)
+
+
 def _resolve_account_config(account: str, unit_type: str):
 	"""Return (rows, has_customization).
 
 	``rows`` is a list of dicts: {attribute, is_required, display_order}.
-	``has_customization`` is True when Account Unit Type Attribute rows exist
-	for (account, unit_type); False when falling back to System Defaults.
+	``has_customization`` is True when the account has explicitly customized
+	the attributes for this unit type (even if the customized list is empty);
+	False when falling back to System Defaults.
 	"""
-	customizations = frappe.get_all(
-		"Account Unit Type Attribute",
-		filters={"rental_account": account, "unit_type": unit_type},
-		fields=["attribute", "is_required", "display_order"],
-		order_by="display_order asc",
+	has_customization = bool(
+		frappe.db.get_value(
+			"Account Unit Type",
+			{"rental_account": account, "unit_type": unit_type},
+			"has_custom_attributes",
+		)
 	)
-	if customizations:
+
+	# Backward compatibility: existing data may have Account Unit Type Attribute
+	# rows without the has_custom_attributes flag being set.
+	if not has_customization:
+		has_customization = bool(
+			frappe.db.exists(
+				"Account Unit Type Attribute",
+				{"rental_account": account, "unit_type": unit_type},
+			)
+		)
+
+	if has_customization:
+		customizations = frappe.get_all(
+			"Account Unit Type Attribute",
+			filters={"rental_account": account, "unit_type": unit_type},
+			fields=["attribute", "is_required", "display_order"],
+			order_by="display_order asc",
+		)
 		return customizations, True
 
 	type_doc = frappe.get_doc("Unit Type", unit_type)
@@ -122,13 +163,23 @@ def get_unit_types(include_inactive=1):
 
 	# Pre-fetch all account overrides for this account (one query)
 	account_overrides = {}
+	custom_attr_counts = {}
 	if account:
 		for row in frappe.get_all(
 			"Account Unit Type",
 			filters={"rental_account": account},
-			fields=["unit_type", "is_active"],
+			fields=["unit_type", "is_active", "has_custom_attributes"],
 		):
 			account_overrides[row["unit_type"]] = int(row["is_active"] or 0)
+			if row.get("has_custom_attributes"):
+				custom_attr_counts[row["unit_type"]] = 0
+
+		for row in frappe.get_all(
+			"Account Unit Type Attribute",
+			filters={"rental_account": account},
+			fields=["unit_type"],
+		):
+			custom_attr_counts[row["unit_type"]] = custom_attr_counts.get(row["unit_type"], 0) + 1
 
 	result = []
 	for t in types:
@@ -143,7 +194,10 @@ def get_unit_types(include_inactive=1):
 		t["has_account_override"] = has_override
 		t["system_is_active"] = system_active
 		t["unit_count"] = frappe.db.count("Rental Unit", {"unit_type": t["name"]})
-		t["attribute_count"] = frappe.db.count("Unit Type Attribute", {"parent": t["name"]})
+		if account and t["name"] in custom_attr_counts:
+			t["attribute_count"] = custom_attr_counts[t["name"]]
+		else:
+			t["attribute_count"] = frappe.db.count("Unit Type Attribute", {"parent": t["name"]})
 
 		if not int(include_inactive) and not effective_active:
 			continue
@@ -285,7 +339,7 @@ def get_unit_type_attributes(unit_type):
 		})
 
 	result.sort(key=lambda x: (x["display_order"], x["attribute_name"]))
-	return {"attributes": result}
+	return {"attributes": result, "has_customization": has_customization}
 
 
 @frappe.whitelist()
@@ -406,6 +460,9 @@ def save_account_unit_type_attributes(unit_type, attributes):
 		frappe.db.rollback(save_point="before_account_attributes_save")
 		raise
 
+	# 4. Mark this unit type as having custom attribute configuration
+	_ensure_account_unit_type_flag(account, unit_type, has_custom_attributes=1)
+
 	return {"success": True, "count": len(attributes)}
 
 
@@ -440,5 +497,17 @@ def reset_account_unit_type_attributes(unit_type):
 		frappe.delete_doc(
 			"Account Unit Type Attribute", name, ignore_permissions=True,
 		)
+
+	# Clear the custom-attributes flag so future reads fall back to defaults
+	aut_name = frappe.db.get_value(
+		"Account Unit Type",
+		{"rental_account": account, "unit_type": unit_type},
+		"name",
+	)
+	if aut_name:
+		doc = frappe.get_doc("Account Unit Type", aut_name)
+		doc.has_custom_attributes = 0
+		doc.flags.ignore_version = True
+		doc.save(ignore_permissions=True)
 
 	return {"success": True, "removed": len(existing)}

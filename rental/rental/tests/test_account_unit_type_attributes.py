@@ -50,6 +50,11 @@ class TestAccountUnitTypeAttributes(FrappeTestCase):
 		for name in cls._created_configs:
 			if frappe.db.exists("Account Unit Type Attribute", name):
 				frappe.delete_doc("Account Unit Type Attribute", name, force=True)
+		# Also clean up any Account Unit Type markers created during tests
+		for account in cls._created_accounts:
+			auts = frappe.get_all("Account Unit Type", filters={"rental_account": account}, pluck="name")
+			for aut_name in auts:
+				frappe.delete_doc("Account Unit Type", aut_name, force=True)
 		for name in cls._created_accounts:
 			if frappe.db.exists("Rental Account", name):
 				frappe.delete_doc("Rental Account", name, force=True)
@@ -108,6 +113,11 @@ class TestAccountUnitTypeAttributes(FrappeTestCase):
 		configs = frappe.get_all("Account Unit Type Attribute", filters=filters, pluck="name")
 		for name in configs:
 			frappe.delete_doc("Account Unit Type Attribute", name, ignore_permissions=True)
+
+		# Also remove Account Unit Type markers so has_custom_attributes doesn't leak
+		auts = frappe.get_all("Account Unit Type", filters=filters, pluck="name")
+		for name in auts:
+			frappe.delete_doc("Account Unit Type", name, ignore_permissions=True)
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
@@ -581,3 +591,104 @@ class TestAccountUnitTypeAttributes(FrappeTestCase):
 		codes = [a["attribute_code"] for a in result_final["attributes"]]
 		self.assertIn("rooms_count", codes)
 		self.assertIn("electricity_meter", codes)
+
+	# ======================================================================
+	# T19: Empty customization list returns empty, not defaults
+	# ======================================================================
+
+	def test_t19_empty_customization_returns_empty_not_defaults(self):
+		from rental.rental.api.unit_settings import (
+			get_unit_type_attributes, save_account_unit_type_attributes,
+		)
+		apartment = self._get_apartment()
+
+		frappe.set_user(self.owner_a)
+		# First save with some attrs
+		rooms = self._get_attr("rooms_count")
+		payload = json.dumps([
+			{"attribute": rooms, "is_required": 1, "display_order": 0},
+		])
+		save_account_unit_type_attributes(apartment, payload)
+
+		# Now save empty list (delete all)
+		empty_payload = json.dumps([])
+		save_account_unit_type_attributes(apartment, empty_payload)
+
+		# Reload — should be empty, NOT fall back to defaults
+		result = get_unit_type_attributes(apartment)
+		self.assertEqual(len(result["attributes"]), 0, "Empty customization should return empty list")
+		self.assertTrue(result["has_customization"], "Should report has_customization=True")
+
+	# ======================================================================
+	# T20: Reset after empty customization restores defaults
+	# ======================================================================
+
+	def test_t20_reset_after_empty_restores_defaults(self):
+		from rental.rental.api.unit_settings import (
+			get_unit_type_attributes, save_account_unit_type_attributes,
+			reset_account_unit_type_attributes,
+		)
+		apartment = self._get_apartment()
+
+		frappe.set_user(self.owner_a)
+		# Save empty list
+		empty_payload = json.dumps([])
+		save_account_unit_type_attributes(apartment, empty_payload)
+
+		# Verify empty
+		result = get_unit_type_attributes(apartment)
+		self.assertEqual(len(result["attributes"]), 0)
+
+		# Reset to defaults
+		reset_account_unit_type_attributes(apartment)
+
+		# Verify defaults restored
+		result_after = get_unit_type_attributes(apartment)
+		self.assertGreater(len(result_after["attributes"]), 0, "Defaults should be restored after reset")
+		self.assertFalse(result_after["has_customization"], "Should report has_customization=False")
+
+	# ======================================================================
+	# T21: get_unit_types shows 0 attribute_count for empty customization
+	# ======================================================================
+
+	def test_t21_get_unit_types_shows_zero_for_empty_customization(self):
+		from rental.rental.api.unit_settings import (
+			get_unit_types, save_account_unit_type_attributes,
+		)
+		apartment = self._get_apartment()
+
+		frappe.set_user(self.owner_a)
+		# Save empty list
+		empty_payload = json.dumps([])
+		save_account_unit_type_attributes(apartment, empty_payload)
+
+		result = get_unit_types(include_inactive=1)
+		apartment_row = next((t for t in result["unitTypes"] if t["name"] == apartment), None)
+		self.assertIsNotNone(apartment_row, "Apartment should be in unit types list")
+		self.assertEqual(apartment_row["attribute_count"], 0, "Empty customization should show 0 attributes")
+
+	# ======================================================================
+	# T22: get_available_attributes returns all when customization is empty
+	# ======================================================================
+
+	def test_t22_available_returns_all_when_customization_empty(self):
+		from rental.rental.api.unit_settings import (
+			get_available_attributes, save_account_unit_type_attributes,
+		)
+		apartment = self._get_apartment()
+
+		frappe.set_user(self.owner_a)
+		# Save empty list
+		empty_payload = json.dumps([])
+		save_account_unit_type_attributes(apartment, empty_payload)
+
+		result = get_available_attributes(apartment)
+		# Should return all active system attributes since none are used
+		all_system_attrs = frappe.get_all(
+			"Unit Attribute",
+			filters={"is_active": 1, "is_system": 1},
+			pluck="name",
+		)
+		available_names = [a["name"] for a in result["attributes"]]
+		for attr_name in all_system_attrs:
+			self.assertIn(attr_name, available_names, f"All system attrs should be available when customization is empty")
