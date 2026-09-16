@@ -4,54 +4,93 @@
     <transition name="fade">
       <div
         v-if="mobileOpen"
-        class="fixed inset-0 bg-navy-950/60 backdrop-blur-sm z-30 lg:hidden"
+        class="fixed inset-0 bg-navy-950/60 backdrop-blur-sm z-30 md:hidden"
         @click="mobileOpen = false"
       />
     </transition>
 
     <!-- Sidebar -->
     <aside
-      class="fixed lg:static inset-y-0 right-0 w-[260px] flex flex-col z-40 transform transition-transform duration-300 lg:translate-x-0 print:hidden"
-      :class="mobileOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'"
+      class="fixed md:static inset-y-0 right-0 flex flex-col z-40 transform transition-all duration-300 md:translate-x-0 print:hidden"
+      :class="[
+        mobileOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0',
+        sidebarWidthClass,
+      ]"
       style="background: #012350;"
     >
       <!-- Logo / Brand — unified 76px height to align with Topbar bottom border -->
-      <div class="h-[76px] flex items-center px-6 border-b border-white/[0.06]">
-        <div class="flex items-center gap-3">
+      <div
+        class="relative h-[76px] flex items-center border-b border-white/[0.06]"
+        :class="collapsed && !isMobile ? 'px-3' : 'px-6'"
+      >
+        <div
+          class="flex items-center gap-3 transition-all duration-300 overflow-hidden"
+          :class="collapsed && !isMobile ? 'opacity-0 w-0 pointer-events-none' : ''"
+        >
           <img
             src="/images/albaron-logo.png"
             alt="ALBaron Systems"
             class="object-contain w-[52px] h-auto shrink-0"
           />
-          <div>
+          <div v-if="!collapsed || isMobile">
             <h1 class="text-base font-bold text-white tracking-tight">نظام الإيجار</h1>
             <p v-if="session.state.account" class="text-[11px] text-gold-400/70 font-medium mt-0.5 truncate max-w-[160px]">
               {{ session.state.account.account_name }}
             </p>
           </div>
         </div>
+
+        <!-- Collapse / Expand toggle (desktop/tablet only) -->
+        <button
+          v-if="!isMobile"
+          class="absolute top-1/2 -translate-y-1/2 left-3 flex items-center justify-center rounded-lg p-1.5 text-white/40 hover:text-white hover:bg-white/[0.08] transition-colors"
+          @click="collapsed = !collapsed"
+        >
+          <svg
+            v-if="!collapsed"
+            class="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l5 5-5 5M6 5l5 5-5 5"/>
+          </svg>
+          <svg
+            v-else
+            class="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+          </svg>
+        </button>
       </div>
 
       <!-- Nav — 16px gap above first link from the divider -->
-      <nav class="flex-1 px-3 pt-4 pb-2 space-y-1 overflow-y-auto">
+      <nav class="flex-1 pt-4 pb-2 space-y-1 overflow-y-auto" :class="collapsed && !isMobile ? 'px-2' : 'px-3'">
         <RouterLink
           v-for="item in navItems"
           :key="item.to"
           :to="item.to"
           class="sidebar-item"
-          :class="{ 'sidebar-item-active': isActive(item) }"
+          :class="{
+            'sidebar-item-active': isActive(item),
+            'justify-center !px-2': collapsed && !isMobile,
+          }"
+          :title="collapsed && !isMobile ? item.label : undefined"
           @click="mobileOpen = false"
         >
           <svg class="w-[18px] h-[18px] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" :d="item.icon"/>
           </svg>
-          <span>{{ item.label }}</span>
+          <span v-if="!collapsed || isMobile">{{ item.label }}</span>
         </RouterLink>
       </nav>
 
       <!-- User section -->
-      <div class="px-4 py-4 border-t border-white/[0.06]">
-        <div class="flex items-center gap-3 px-2 py-2 rounded-xl bg-white/[0.03] mb-2">
+      <div class="border-t border-white/[0.06]" :class="collapsed && !isMobile ? 'px-2 py-3' : 'px-4 py-4'">
+        <div v-if="!collapsed || isMobile" class="flex items-center gap-3 px-2 py-2 rounded-xl bg-white/[0.03] mb-2">
           <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-navy-900 shrink-0" style="background: #b38942;">
             {{ userInitial }}
           </div>
@@ -61,11 +100,12 @@
           </div>
         </div>
         <button
-          class="w-full text-sm text-white/50 hover:text-white flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/[0.04] transition-colors"
+          class="w-full text-sm text-white/50 hover:text-white flex items-center rounded-lg hover:bg-white/[0.04] transition-colors"
+          :class="collapsed && !isMobile ? 'justify-center px-2 py-2' : 'gap-2 px-3 py-2'"
           @click="handleLogout"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-          تسجيل الخروج
+          <span v-if="!collapsed || isMobile">تسجيل الخروج</span>
         </button>
       </div>
     </aside>
@@ -73,11 +113,11 @@
     <!-- Main content -->
     <div class="flex-1 flex flex-col overflow-hidden">
       <!-- Top Bar (sticky, all viewports — matches original DashboardLayout header, print:hidden) -->
-      <header class="sticky top-0 z-30 flex h-[76px] shrink-0 items-center justify-between border-b border-ivory-300/30 bg-white px-4 lg:px-6 print:hidden">
+      <header class="sticky top-0 z-30 flex h-[76px] shrink-0 items-center justify-between border-b border-ivory-300/30 bg-white px-4 md:px-6 print:hidden">
         <div class="flex items-center gap-3">
           <!-- Mobile menu button -->
           <button
-            class="flex items-center justify-center rounded-[10px] p-2 text-navy-400 hover:bg-ivory-200 lg:hidden"
+            class="flex items-center justify-center rounded-[10px] p-2 text-navy-400 hover:bg-ivory-200 md:hidden"
             @click="mobileOpen = true"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
@@ -218,6 +258,30 @@ const route = useRoute()
 const session = useSession()
 const mobileOpen = ref(false)
 
+// ---- Collapsible sidebar state ----
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
+const isMobile = computed(() => windowWidth.value < 768)
+const isTablet = computed(() => windowWidth.value >= 768 && windowWidth.value < 1024)
+const isDesktop = computed(() => windowWidth.value >= 1024)
+const collapsed = ref(false)
+
+function updateWindowWidth() {
+  windowWidth.value = window.innerWidth
+}
+
+watch(isTablet, (val, oldVal) => {
+  if (val && !oldVal) collapsed.value = true
+})
+
+watch(isDesktop, (val, oldVal) => {
+  if (val && !oldVal) collapsed.value = false
+})
+
+const sidebarWidthClass = computed(() => {
+  if (isMobile.value) return 'w-[260px]'
+  return collapsed.value ? 'w-[72px]' : 'w-[260px]'
+})
+
 // ---- Notifications state ----
 const notificationsRef = ref(null)
 const notificationsOpen = ref(false)
@@ -314,6 +378,10 @@ function handleClickOutside(e) {
 
 // ---- Lifecycle ----
 onMounted(() => {
+  updateWindowWidth()
+  if (isTablet.value) collapsed.value = true
+  else if (isDesktop.value) collapsed.value = false
+  window.addEventListener('resize', updateWindowWidth)
   fetchNotifications()
   // Refresh every 5 minutes — matches original (300000ms)
   notificationsInterval = setInterval(fetchNotifications, 300000)
@@ -321,6 +389,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateWindowWidth)
   if (notificationsInterval) clearInterval(notificationsInterval)
   document.removeEventListener('mousedown', handleClickOutside)
 })
