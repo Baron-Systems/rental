@@ -1570,3 +1570,121 @@ class TestContracts(FrappeTestCase):
 			set(options),
 			{"monthly", "bi_monthly", "quarterly", "semi_annual", "annual"},
 		)
+
+	# --- activate_started_contracts (daily cron: reserved → rented) ---
+
+	def test_activate_started_contracts_reserved_to_rented(self):
+		"""activate_started_contracts transitions reserved → rented when start_date arrives.
+
+		Simulates time passing for a future-approved contract: the unit is
+		'reserved' before start_date, then start_date is moved to today
+		(bypassing validate so no event fires), then the daily cron runs
+		activate_started_contracts() which re-derives status via
+		derive_unit_status and writes 'rented'.
+		"""
+		building = self._create_building("Activate Building")
+		unit = self._create_unit(building, "U-ACT")
+		tenant = self._create_tenant("Activate Tenant")
+
+		# Future contract: starts in 5 days
+		start = frappe.utils.add_days(frappe.utils.today(), 5)
+		end = frappe.utils.add_days(frappe.utils.today(), 370)
+		contract_name = self._create_contract(tenant, building, unit, start, end)
+
+		from rental.rental.api.contract import approve_contract
+		approve_contract(contract_name, generate_dues=1)
+
+		# Unit should be reserved (upcoming active contract)
+		self.assertEqual(
+			frappe.db.get_value("Rental Unit", unit, "status"),
+			"reserved",
+			"Future approved contract should set unit to reserved",
+		)
+
+		# Simulate start_date arriving: move start_date to today.
+		# This bypasses validate() so status stays 'active' and the unit
+		# stays 'reserved' (no event fires).
+		frappe.db.set_value(
+			"Lease Contract", contract_name,
+			"start_date", frappe.utils.today(),
+			update_modified=False,
+		)
+
+		# Unit is still reserved (no lifecycle event fired)
+		self.assertEqual(
+			frappe.db.get_value("Rental Unit", unit, "status"),
+			"reserved",
+			"Unit should still be reserved before the cron runs",
+		)
+
+		# Run the daily cron's activation step
+		from rental.rental.services.contract_validation import activate_started_contracts
+		activate_started_contracts()
+
+		# Unit should now be rented (current active contract)
+		self.assertEqual(
+			frappe.db.get_value("Rental Unit", unit, "status"),
+			"rented",
+			"activate_started_contracts should transition reserved → rented",
+		)
+
+		# Idempotent: a second run finds the unit is 'rented' (not in the
+		# reserved candidate set) and does not change it.
+		activate_started_contracts()
+		self.assertEqual(
+			frappe.db.get_value("Rental Unit", unit, "status"),
+			"rented",
+			"Second activate_started_contracts run should be idempotent",
+		)
+
+	def test_activate_started_contracts_cancelled_future_to_empty(self):
+		"""A reserved unit whose future contract was cancelled re-derives to empty.
+
+		Tests the safety-net property: if the cancel event's recalculate was
+		missed (unit stuck at 'reserved'), activate_started_contracts()
+		re-derives via derive_unit_status and corrects it to 'empty' because
+		the cancelled contract (cancelled_at < start_date) matches no rule.
+		"""
+		building = self._create_building("ActivateCancel Building")
+		unit = self._create_unit(building, "U-AC")
+		tenant = self._create_tenant("Activate Cancel Tenant")
+
+		# Future contract: starts in 30 days
+		start = frappe.utils.add_days(frappe.utils.today(), 30)
+		end = frappe.utils.add_days(frappe.utils.today(), 395)
+		contract_name = self._create_contract(tenant, building, unit, start, end)
+
+		from rental.rental.api.contract import approve_contract, cancel_contract
+		approve_contract(contract_name, generate_dues=1)
+		self.assertEqual(
+			frappe.db.get_value("Rental Unit", unit, "status"),
+			"reserved",
+		)
+
+		# Cancel before start (cancellation_date < start_date)
+		cancel_contract(
+			contract_name,
+			cancellation_date=frappe.utils.today(),
+			reason="Future cancel test",
+		)
+
+		# The event-driven recalculate should have set it to empty
+		self.assertEqual(
+			frappe.db.get_value("Rental Unit", unit, "status"),
+			"empty",
+			"Cancelled-before-start should set unit to empty via event",
+		)
+
+		# Simulate a missed event: force the unit back to 'reserved'
+		frappe.db.set_value(
+			"Rental Unit", unit, "status", "reserved", update_modified=False,
+		)
+
+		# Run activate_started_contracts — should re-derive to 'empty'
+		from rental.rental.services.contract_validation import activate_started_contracts
+		activate_started_contracts()
+		self.assertEqual(
+			frappe.db.get_value("Rental Unit", unit, "status"),
+			"empty",
+			"activate_started_contracts should correct stale reserved → empty",
+		)

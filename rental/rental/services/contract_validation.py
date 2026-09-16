@@ -604,6 +604,54 @@ def expire_contracts() -> int:
 	return count
 
 
+def activate_started_contracts() -> int:
+	"""Daily: recompute status for units currently marked 'reserved'.
+
+	Handles the ``reserved → rented`` transition when an upcoming active
+	contract's ``start_date`` has arrived — the only time-driven transition
+	not covered by :func:`expire_contracts` (which handles ``active → expired``).
+
+	``derive_unit_status`` remains the single source of truth; this function
+	only selects candidate units and re-derives their status, writing only
+	when the derived status differs from the stored one.
+
+	Candidate set is restricted to units with ``status = 'reserved'`` because:
+	- ``reserved`` is set exclusively by ``derive_unit_status`` (rule 4:
+	  upcoming active contract). The field is read_only, so it is never set
+	  manually.
+	- A unit is reserved only briefly (between approval and ``start_date``),
+	  so this set is small even in large fleets.
+	- ``unavailable`` is excluded: it is a manual override that
+	  ``derive_unit_status`` never produces, so we must not auto-change it.
+
+	This also serves as a cheap safety net: any ``reserved`` unit whose
+	underlying contract state changed without an event firing
+	(e.g. a future contract cancelled but the recalculate step was missed)
+	is corrected here, since the reserved set is inherently small.
+
+	Idempotent: a second run finds ``derived == stored`` and writes nothing.
+	"""
+	reserved_units = frappe.db.get_all(
+		"Rental Unit",
+		filters={"status": "reserved"},
+		pluck="name",
+	)
+
+	changed = 0
+	from rental.rental.services.unit_service import derive_unit_status
+
+	for unit_name in reserved_units:
+		unit_doc = frappe.get_doc("Rental Unit", unit_name)
+		derived = derive_unit_status(unit_doc)
+		if derived != "reserved":
+			frappe.db.set_value(
+				"Rental Unit", unit_name, "status", derived,
+				update_modified=False,
+			)
+			changed += 1
+	return changed
+
+
 # ---------------------------------------------------------------------------
 # Contract action eligibility  (source: lib/utils.ts → canRenewContract etc.)
 # ---------------------------------------------------------------------------
