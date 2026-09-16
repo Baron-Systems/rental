@@ -436,7 +436,7 @@ function buildServiceClauseText(charge) {
           return `يلتزم المستأجر بسداد مبلغ قدره ${formatCurrencyLocal(parseFloat(String(amount).replace(/,/g, '')) || 0)} ${frequencyLabel} بدل ${name} للمؤجر.`
         }
         case 'metered':
-          return `يتحمل المستأجر تكاليف استهلاك ${name} حسب قراءة العداد، وتبلغ قراءة العداد عند بداية العقد ${opening_meter_reading || '—'}، ويُحتسب الاستهلاك وفق سعر الوحدة المعتمد وقت تسجيل الاستهلاك، ويسدد المبلغ للمؤجر.`
+          return `يتحمل المستأجر تكاليف استهلاك ${name} حسب قراءة العداد، ويُحتسب الاستهلاك وفق سعر الوحدة المعتمد وقت تسجيل الاستهلاك، ويسدد المبلغ للمؤجر.`
         case 'actual_bill':
           return `يتحمل المستأجر تكلفة ${name} وفق قيمة الفاتورة الفعلية المسجلة خلال مدة العقد، ويسددها للمؤجر.`
         case 'on_demand':

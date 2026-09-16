@@ -939,8 +939,7 @@ def build_service_clause_text(charge) -> str | None:
 			freq_label = _get_frequency_label(charge.frequency)
 			return f"يلتزم المستأجر بسداد مبلغ قدره {_format_currency(float(charge.amount))} {freq_label} بدل {dt_name} للمؤجر."
 		if method == "metered":
-			reading = charge.opening_meter_reading or "—"
-			return f"يتحمل المستأجر تكاليف استهلاك {dt_name} حسب قراءة العداد، وتبلغ قراءة العداد عند بداية العقد {reading}، ويُحتسب الاستهلاك وفق سعر الوحدة المعتمد وقت تسجيل الاستهلاك، ويسدد المبلغ للمؤجر."
+			return f"يتحمل المستأجر تكاليف استهلاك {dt_name} حسب قراءة العداد، ويُحتسب الاستهلاك وفق سعر الوحدة المعتمد وقت تسجيل الاستهلاك، ويسدد المبلغ للمؤجر."
 		if method == "actual_bill":
 			return f"يتحمل المستأجر تكلفة {dt_name} وفق قيمة الفاتورة الفعلية المسجلة خلال مدة العقد، ويسددها للمؤجر."
 		if method == "on_demand":
