@@ -9,7 +9,7 @@ export default defineConfig({
     port: 8080,
     host: '0.0.0.0',
     proxy: {
-      '^/(app|login|api|assets|files)': {
+      '^/(app|login|api|assets|files|sw\\.js|manifest\\.json)': {
         target: 'http://10.2.0.12:80',
         ws: true,
         changeOrigin: true,

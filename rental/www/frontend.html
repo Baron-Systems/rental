@@ -6,8 +6,15 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/rental/frontend/favicon-32.png?v=2" />
     <link rel="icon" type="image/png" sizes="48x48" href="/assets/rental/frontend/favicon-48.png?v=2" />
     <link rel="icon" type="image/png" sizes="16x16" href="/assets/rental/frontend/favicon-16.png?v=2" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>نظام الإيجار</title>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#012350" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="نظام الإيجار" />
+    <link rel="apple-touch-icon" href="/assets/rental/frontend/icons/apple-touch-icon.png" />
     <script>
       window.csrf_token = "{{ csrf_token }}";
     </script>
@@ -29,5 +36,16 @@
     <script src="{{ script.src }}"></script>
     {% endif %}
     {% endfor %}
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker
+            .register("/sw.js", { scope: "/" })
+            .catch(function (err) {
+              console.warn("Service worker registration failed:", err);
+            });
+        });
+      }
+    </script>
   </body>
 </html>
