@@ -498,7 +498,7 @@ def create_contract(**kwargs):
 		if is_system_manager():
 			account = frappe.db.get_value("Rental Account", {"is_active": 1}, "name")
 	if not account:
-		frappe.throw(frappe._("Could not determine Rental Account. Please complete setup first."))
+		frappe.throw(frappe._("تعذر تحديد حساب الإيجار. يرجى إكمال الإعداد أولاً."))
 
 	# Map frontend field names to doctype fields.
 	# The old program's API accepts tenantId/buildingId/unitId; after the

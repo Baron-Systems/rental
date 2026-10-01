@@ -21,7 +21,7 @@ class UserUnitPreference(Document):
 		existing = frappe.db.exists("User Unit Preference", filters)
 		if existing:
 			frappe.throw(
-				frappe._("Preference already exists for this Rental Account + User + Unit Type + Attribute combination."),
+				frappe._("يوجد بالفعل تفضيل لمجموعة حساب الإيجار + المستخدم + نوع الوحدة + الخاصية هذه."),
 				frappe.ValidationError,
 			)
 
@@ -36,7 +36,7 @@ class UserUnitPreference(Document):
 		"""
 		if not frappe.db.exists("Unit Attribute", self.attribute):
 			frappe.throw(
-				frappe._("Attribute '{0}' does not exist.").format(self.attribute),
+				frappe._("الخاصية '{0}' غير موجودة.").format(self.attribute),
 				frappe.ValidationError,
 			)
 
@@ -48,7 +48,7 @@ class UserUnitPreference(Document):
 		# Account-scoped addition — only permitted for System Unit Types
 		if not int(type_doc.is_system or 0):
 			frappe.throw(
-				frappe._("Attribute '{0}' is not assigned to Unit Type '{1}'. Add it to the custom Unit Type first.").format(
+				frappe._("الخاصية '{0}' غير معينة لنوع الوحدة '{1}'. أضفها إلى نوع الوحدة المخصص أولاً.").format(
 					self.attribute, self.unit_type
 				),
 				frappe.ValidationError,

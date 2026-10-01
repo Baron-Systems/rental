@@ -20,7 +20,7 @@ def login(email, password):
 	try:
 		check_password(email, password)
 	except frappe.exceptions.AuthenticationError:
-		frappe.throw(frappe._("Invalid email or password"), frappe.AuthenticationError)
+		frappe.throw(frappe._("البريد الإلكتروني أو كلمة المرور غير صحيحة"), frappe.AuthenticationError)
 
 	frappe.local.login_manager.login(email)
 

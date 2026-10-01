@@ -184,7 +184,7 @@ def complete_setup(
 	account = get_current_rental_account()
 	if account is None:
 		frappe.throw(
-			frappe._("System Manager cannot complete setup wizard"),
+			frappe._("لا يمكن لمسؤول النظام إكمال معالج الإعداد"),
 			frappe.PermissionError,
 		)
 

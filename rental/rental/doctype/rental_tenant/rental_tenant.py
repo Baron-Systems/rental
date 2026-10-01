@@ -25,7 +25,7 @@ class RentalTenant(Document):
 		"""
 		# Require rental_account unless System Manager
 		if not self.rental_account and not is_system_manager():
-			frappe.throw(frappe._("Rental Account is required."))
+			frappe.throw(frappe._("حساب الإيجار مطلوب."))
 		assert_account_access(self)
 
 		# Enforce full_name length 1-100 (TEN-BE-001)

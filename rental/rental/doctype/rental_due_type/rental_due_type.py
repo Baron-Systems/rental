@@ -14,7 +14,7 @@ class RentalDueType(Document):
 			account = get_current_rental_account()
 			if account is not None:
 				frappe.throw(
-					frappe._("System Due Types are read-only and cannot be modified by Property Owners"),
+					frappe._("أنواع الالتزامات النظامية للقراءة فقط ولا يمكن تعديلها من قبل ملاك العقارات"),
 					frappe.PermissionError,
 				)
 
@@ -26,13 +26,13 @@ class RentalDueType(Document):
 				# (the API layer resolves the target account for System Manager)
 				if not self.rental_account:
 					frappe.throw(
-						frappe._("Custom Due Types must belong to a Rental Account"),
+						frappe._("أنواع الالتزامات المخصصة يجب أن تنتمي إلى حساب إيجار"),
 						frappe.ValidationError,
 					)
 				# Validate the assigned account exists and is active
 				if not frappe.db.exists("Rental Account", {"name": self.rental_account, "is_active": 1}):
 					frappe.throw(
-						frappe._("Custom Due Types must belong to a Rental Account"),
+						frappe._("أنواع الالتزامات المخصصة يجب أن تنتمي إلى حساب إيجار"),
 						frappe.ValidationError,
 					)
 				return
@@ -40,7 +40,7 @@ class RentalDueType(Document):
 				self.rental_account = account
 			if self.rental_account != account:
 				frappe.throw(
-					frappe._("You can only create Due Types for your own Rental Account"),
+					frappe._("يمكنك إنشاء أنواع الالتزامات فقط لحساب الإيجار الخاص بك"),
 					frappe.PermissionError,
 				)
 
@@ -51,6 +51,6 @@ class RentalDueType(Document):
 			account = get_current_rental_account()
 			if account is not None:
 				frappe.throw(
-					frappe._("System Due Types cannot be deleted by Property Owners"),
+					frappe._("لا يمكن حذف أنواع الالتزامات النظامية من قبل ملاك العقارات"),
 					frappe.PermissionError,
 				)

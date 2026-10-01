@@ -20,7 +20,7 @@ class UnitAttributeValue(Document):
 		existing = frappe.db.exists("Unit Attribute Value", filters)
 		if existing:
 			frappe.throw(
-				frappe._("A value for this attribute already exists for this unit"),
+				frappe._("يوجد بالفعل قيمة لهذه الخاصية لهذه الوحدة"),
 				frappe.ValidationError,
 			)
 
@@ -31,7 +31,7 @@ class UnitAttributeValue(Document):
 		)
 		if not attr:
 			frappe.throw(
-				frappe._("Attribute does not exist"),
+				frappe._("الخاصية غير موجودة"),
 				frappe.ValidationError,
 			)
 
@@ -65,7 +65,7 @@ class UnitAttributeValue(Document):
 		if account is None:
 			if not self.rental_account:
 				frappe.throw(
-					frappe._("Unit Attribute Values must belong to a Rental Account"),
+					frappe._("قيم خصائص الوحدات يجب أن تنتمي إلى حساب إيجار"),
 					frappe.ValidationError,
 				)
 			return
@@ -73,7 +73,7 @@ class UnitAttributeValue(Document):
 			self.rental_account = account
 		if self.rental_account != account:
 			frappe.throw(
-				frappe._("You can only create Unit Attribute Values for your own Rental Account"),
+				frappe._("يمكنك إنشاء قيم خصائص الوحدات فقط لحساب الإيجار الخاص بك"),
 				frappe.PermissionError,
 			)
 

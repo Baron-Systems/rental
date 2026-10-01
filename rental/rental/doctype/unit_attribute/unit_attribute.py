@@ -62,12 +62,12 @@ class UnitAttribute(Document):
 			if account is None:
 				if not self.rental_account:
 					frappe.throw(
-						frappe._("Custom Unit Attributes must belong to a Rental Account"),
+						frappe._("خصائص الوحدات المخصصة يجب أن تنتمي إلى حساب إيجار"),
 						frappe.ValidationError,
 					)
 				if not frappe.db.exists("Rental Account", {"name": self.rental_account, "is_active": 1}):
 					frappe.throw(
-						frappe._("Custom Unit Attributes must belong to a Rental Account"),
+						frappe._("خصائص الوحدات المخصصة يجب أن تنتمي إلى حساب إيجار"),
 						frappe.ValidationError,
 					)
 				return
@@ -75,7 +75,7 @@ class UnitAttribute(Document):
 				self.rental_account = account
 			if self.rental_account != account:
 				frappe.throw(
-					frappe._("You can only create Unit Attributes for your own Rental Account"),
+					frappe._("يمكنك إنشاء خصائص الوحدات فقط لحساب الإيجار الخاص بك"),
 					frappe.PermissionError,
 				)
 
@@ -83,7 +83,7 @@ class UnitAttribute(Document):
 		"""Custom (non-system) attributes cannot set capability_code."""
 		if not self.is_system and self.capability_code:
 			frappe.throw(
-				frappe._("Capability codes can only be set on system attributes"),
+				frappe._("يمكن تعيين رموز القدرة فقط على الخصائص النظامية"),
 				frappe.ValidationError,
 			)
 
@@ -96,7 +96,7 @@ class UnitAttribute(Document):
 		existing = frappe.db.exists("Unit Attribute", filters)
 		if existing:
 			frappe.throw(
-				frappe._("Unit Attribute code '{0}' is already in use").format(self.code),
+				frappe._("رمز خاصية الوحدة '{0}' مستخدم مسبقًا").format(self.code),
 				frappe.ValidationError,
 			)
 
@@ -112,7 +112,7 @@ class UnitAttribute(Document):
 		values = frappe.db.count("Unit Attribute Value", {"attribute": self.name})
 		if values > 0:
 			frappe.throw(
-				frappe._("Cannot delete Unit Attribute '{0}' because {1} value(s) exist").format(
+				frappe._("لا يمكن حذف خاصية الوحدة '{0}' لوجود {1} قيمة/قيم").format(
 					self.attribute_name, values
 				),
 				frappe.ValidationError,
@@ -121,7 +121,7 @@ class UnitAttribute(Document):
 		assignments = frappe.db.count("Unit Type Attribute", {"attribute": self.name})
 		if assignments > 0:
 			frappe.throw(
-				frappe._("Cannot delete Unit Attribute '{0}' because {1} type assignment(s) exist").format(
+				frappe._("لا يمكن حذف خاصية الوحدة '{0}' لوجود {1} تعيين/تعيينات نوع").format(
 					self.attribute_name, assignments
 				),
 				frappe.ValidationError,

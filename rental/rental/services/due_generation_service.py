@@ -112,7 +112,7 @@ def get_rent_due_type() -> str:
 		"name",
 	)
 	if not name:
-		frappe.throw(frappe._("Rent due type not found"))
+		frappe.throw(frappe._("نوع التزام الإيجار غير موجود"))
 	return name
 
 
@@ -136,13 +136,13 @@ def generate_contract_dues(contract_doc, account: str, generate: bool = True) ->
 	# Check contract exists (read from DB to avoid stale doc object)
 	# Source: generateContractDues (due-generation.service.ts:16)
 	if not frappe.db.exists("Lease Contract", contract_doc.name):
-		frappe.throw(frappe._("Contract not found"))
+		frappe.throw(frappe._("العقد غير موجود"))
 
 	# Check contract status (read from DB to avoid stale doc object)
 	# Source: generateContractDues (due-generation.service.ts:17)
 	status = frappe.db.get_value("Lease Contract", contract_doc.name, "status")
 	if status != "active" and status != "expired":
-		frappe.throw(frappe._("Contract must be active or expired"))
+		frappe.throw(frappe._("يجب أن يكون العقد فعّالاً أو منتهياً"))
 
 	# Archive protection — blocks generating dues for archived contracts.
 	ensure_contract_not_archived(contract_doc.name, action="إنشاء التزامات")
@@ -156,7 +156,7 @@ def generate_contract_dues(contract_doc, account: str, generate: bool = True) ->
 		},
 	)
 	if existing:
-		frappe.throw(frappe._("Dues already generated for this contract"))
+		frappe.throw(frappe._("تم إنشاء الالتزامات لهذا العقد مسبقًا"))
 
 	rent_due_type = get_rent_due_type()
 
@@ -272,7 +272,7 @@ def regenerate_future_dues(contract_name: str, new_rent: float, from_date) -> li
 	"""
 	# Check contract exists (source: regenerateFutureDues line 110-113)
 	if not frappe.db.exists("Lease Contract", contract_name):
-		frappe.throw(frappe._("Contract not found"))
+		frappe.throw(frappe._("العقد غير موجود"))
 
 	# Archive protection — blocks regenerating dues for archived contracts.
 	ensure_contract_not_archived(contract_name, action="تعديل التزامات")

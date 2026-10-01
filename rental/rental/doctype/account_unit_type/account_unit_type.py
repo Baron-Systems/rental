@@ -17,6 +17,6 @@ class AccountUnitType(Document):
 		existing = frappe.db.exists("Account Unit Type", filters)
 		if existing:
 			frappe.throw(
-				frappe._("An Account Unit Type override already exists for this account and unit type."),
+				frappe._("يوجد بالفعل تجاوز لنوع الوحدة لهذا الحساب ونوع الوحدة."),
 				frappe.ValidationError,
 			)

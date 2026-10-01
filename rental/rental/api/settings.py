@@ -213,7 +213,7 @@ def update_settings(**kwargs) -> dict:
 	account = _get_account_or_fallback()
 	if account is None:
 		frappe.throw(
-			frappe._("No active Rental Account found. Please complete setup first."),
+			frappe._("لم يتم العثور على حساب إيجار نشط. يرجى إكمال الإعداد أولاً."),
 			frappe.PermissionError,
 		)
 
@@ -222,7 +222,7 @@ def update_settings(**kwargs) -> dict:
 	)
 	if not settings_name:
 		frappe.throw(
-			frappe._("Settings not found. Please complete setup first."),
+			frappe._("الإعدادات غير موجودة. يرجى إكمال الإعداد أولاً."),
 			frappe.ValidationError,
 		)
 
@@ -340,7 +340,7 @@ def create_due_type(due_type_name, due_type_code=None, is_active=1, rental_accou
 		# System Manager: fall back to the first active rental account
 		accounts = frappe.get_all("Rental Account", filters={"is_active": 1}, fields=["name"], limit=1)
 		if not accounts:
-			frappe.throw(frappe._("No active Rental Account found. Please complete setup first."), frappe.PermissionError)
+			frappe.throw(frappe._("لم يتم العثور على حساب إيجار نشط. يرجى إكمال الإعداد أولاً."), frappe.PermissionError)
 		account = accounts[0]["name"]
 
 	name = (due_type_name or "").strip()

@@ -498,7 +498,7 @@ def reorder_floors(building, floor_ids=None, floor_order=None):
 		# Validate floor belongs to building
 		floor_building = frappe.db.get_value("Rental Floor", floor_name, "building")
 		if floor_building != building:
-			frappe.throw(frappe._("Floor {0} does not belong to building {1}").format(floor_name, building))
+			frappe.throw(frappe._("الطابق {0} لا ينتمي إلى العقار {1}").format(floor_name, building))
 		frappe.db.set_value("Rental Floor", floor_name, "sort_order", index, update_modified=False)
 
 	return {"success": True}

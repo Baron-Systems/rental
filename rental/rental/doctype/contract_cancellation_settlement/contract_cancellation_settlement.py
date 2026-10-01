@@ -16,7 +16,7 @@ class ContractCancellationSettlement(Document):
 
 	def validate(self):
 		if not self.rental_account and not is_system_manager():
-			frappe.throw(frappe._("Rental Account is required."))
+			frappe.throw(frappe._("حساب الإيجار مطلوب."))
 		assert_account_access(self)
 
 		# Archive protection — blocks creating/editing settlements for

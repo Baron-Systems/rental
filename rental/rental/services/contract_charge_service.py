@@ -479,7 +479,7 @@ def generate_fixed_periodic_dues(contract_doc, account: str) -> int:
 
 	# Source: contract-charge.service.ts:501-503 — status must be active or expired
 	if contract_doc.status not in ("active", "expired"):
-		frappe.throw(frappe._("Contract must be active or expired"))
+		frappe.throw(frappe._("يجب أن يكون العقد فعّالاً أو منتهياً"))
 
 	# Archive protection — blocks generating fixed-periodic dues for archived contracts.
 	ensure_contract_not_archived(contract_doc.name, action="إنشاء التزامات دورية")

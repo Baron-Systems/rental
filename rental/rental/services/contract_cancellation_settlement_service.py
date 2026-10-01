@@ -78,7 +78,7 @@ def _assert_valid_period(due, cancellation_date, label: str) -> None:
 	period_end = due.get("period_end") if isinstance(due, dict) else due.period_end
 
 	if not period_start or not period_end:
-		raise CancellationError(frappe._("{0}: due period is unresolved").format(label), 400)
+		raise CancellationError(frappe._("{0}: فترة الالتزام غير محددة").format(label), 400)
 
 	start = to_calendar_day(period_start)
 	end = to_calendar_day(period_end)
@@ -86,12 +86,12 @@ def _assert_valid_period(due, cancellation_date, label: str) -> None:
 
 	if end < start:
 		raise CancellationError(
-			frappe._("{0}: invalid period (periodEnd before periodStart)").format(label), 400
+			frappe._("{0}: فترة غير صالحة (نهاية الفترة قبل بدايتها)").format(label), 400
 		)
 
 	if cancel < start or cancel > end:
 		raise CancellationError(
-			frappe._("{0}: cancellation date is outside due period").format(label), 400
+			frappe._("{0}: تاريخ الإلغاء خارج فترة الالتزام").format(label), 400
 		)
 
 
@@ -137,7 +137,7 @@ def _compute_item_values(
 			)
 	elif decision == "manual_settlement":
 		if stored_final_amount is None:
-			raise CancellationError(frappe._("Manual settlement requires final amount"), 400)
+			raise CancellationError(frappe._("التسوية اليدوية تتطلب المبلغ النهائي"), 400)
 		T = round_money(float(stored_final_amount))
 		if T < 0 or T > C:
 			raise CancellationError(
@@ -146,7 +146,7 @@ def _compute_item_values(
 	elif decision == "full_waiver":
 		T = 0
 	else:
-		raise CancellationError(frappe._("Invalid decision: {0}").format(decision), 400)
+		raise CancellationError(frappe._("قرار غير صالح: {0}").format(decision), 400)
 
 	settlement_waiver_amount = round_money(C - T)
 
@@ -223,12 +223,12 @@ def create_contract_cancellation_settlement(
 
 	# Check contract exists (legacy line 180)
 	if not frappe.db.exists("Lease Contract", contract_name):
-		raise CancellationError(frappe._("Contract not found"), 404)
+		raise CancellationError(frappe._("العقد غير موجود"), 404)
 
 	# Check for existing settlement (legacy line 181)
 	existing = frappe.db.exists("Contract Cancellation Settlement", {"contract": contract_name})
 	if existing:
-		raise CancellationError(frappe._("Settlement already exists for this contract"), 409)
+		raise CancellationError(frappe._("توجد تسوية بالفعل لهذا العقد"), 409)
 
 	settlement = frappe.get_doc({
 		"doctype": "Contract Cancellation Settlement",
@@ -307,11 +307,11 @@ def settle_contract_cancellation_item(
 			break
 
 	if not item:
-		raise CancellationError(frappe._("Settlement item not found"), 404)
+		raise CancellationError(frappe._("عنصر التسوية غير موجود"), 404)
 
 	# Check settlement is not completed (legacy line 248: item.settlement.status === 'completed')
 	if settlement.status == "completed":
-		raise CancellationError(frappe._("Settlement is already completed"), 409)
+		raise CancellationError(frappe._("التسوية مكتملة بالفعل"), 409)
 
 	# Archive protection — blocks settling items for archived contracts.
 	ensure_contract_not_archived(settlement.contract, action="تسوية عنصر إلغاء العقد")
@@ -322,7 +322,7 @@ def settle_contract_cancellation_item(
 		as_dict=True,
 	)
 	if not due:
-		raise CancellationError(frappe._("Due not found"), 404)
+		raise CancellationError(frappe._("الالتزام غير موجود"), 404)
 
 	original_amount = float(item.original_amount)
 	cancellation_date = settlement.cancellation_date
@@ -378,7 +378,7 @@ def complete_contract_cancellation_settlement(settlement_name: str, account: str
 
 	# Legacy line 353: if (!settlement) throw 'Settlement not found', 404
 	if not settlement:
-		raise CancellationError(frappe._("Settlement not found"), 404)
+		raise CancellationError(frappe._("التسوية غير موجودة"), 404)
 
 	# Legacy line 354: if (settlement.status === 'completed') return settlement
 	if settlement.status == "completed":
@@ -404,7 +404,7 @@ def complete_contract_cancellation_settlement(settlement_name: str, account: str
 	unresolved_dues = [d for d in all_dues if not d.period_start or not d.period_end]
 	if unresolved_dues:
 		raise CancellationError(
-			frappe._("Cannot complete settlement: unresolved dues exist ({0})").format(
+			frappe._("لا يمكن إكمال التسوية: توجد التزامات غير محسومة ({0})").format(
 				", ".join(d.name for d in unresolved_dues)
 			),
 			409,
@@ -416,7 +416,7 @@ def complete_contract_cancellation_settlement(settlement_name: str, account: str
 		if it.status == "pending" or it.decision == "pending"
 	]
 	if pending_items:
-		raise CancellationError(frappe._("Cannot complete settlement: pending items exist"), 409)
+		raise CancellationError(frappe._("لا يمكن إكمال التسوية: توجد عناصر معلقة"), 409)
 
 	# Cancel all future auto-contract dues (legacy lines 380-385)
 	for due in all_dues:
@@ -435,7 +435,7 @@ def complete_contract_cancellation_settlement(settlement_name: str, account: str
 		# Legacy line 392: if (!currentDue || currentDue.status !== 'approved')
 		if not current_due or current_due.docstatus != 1:
 			raise CancellationError(
-				frappe._("Due {0} is not approved").format(item.due), 409
+				frappe._("الالتزام {0} غير معتمد").format(item.due), 409
 			)
 
 		# Assert valid period (legacy line 396)
@@ -539,10 +539,10 @@ def resolve_due(
 	)
 	# Legacy line 296
 	if not settlement:
-		raise CancellationError(frappe._("Settlement not found"), 404)
+		raise CancellationError(frappe._("التسوية غير موجودة"), 404)
 	# Legacy line 297
 	if settlement.status == "completed":
-		raise CancellationError(frappe._("Settlement is already completed"), 409)
+		raise CancellationError(frappe._("التسوية مكتملة بالفعل"), 409)
 
 	# Get due (legacy lines 299-302)
 	due = frappe.db.get_value(
@@ -552,7 +552,7 @@ def resolve_due(
 	)
 	# Legacy line 303
 	if not due:
-		raise CancellationError(frappe._("Due not found"), 404)
+		raise CancellationError(frappe._("الالتزام غير موجود"), 404)
 
 	# Legacy lines 304-306
 	if due.contract != settlement.contract:

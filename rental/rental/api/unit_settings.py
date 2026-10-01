@@ -216,14 +216,14 @@ def toggle_account_unit_type(unit_type, is_active):
 	account = _get_account_or_fallback()
 	if not account:
 		frappe.throw(
-			frappe._("No active Rental Account found. Please complete setup first."),
+			frappe._("لم يتم العثور على حساب إيجار نشط. يرجى إكمال الإعداد أولاً."),
 			frappe.PermissionError,
 		)
 
 	type_doc = frappe.get_doc("Unit Type", unit_type)
 	if not int(type_doc.is_system or 0):
 		frappe.throw(
-			frappe._("Account-level toggle is only supported on System Unit Types."),
+			frappe._("التبديل على مستوى الحساب مدعوم فقط على أنواع الوحدات النظامية."),
 			frappe.ValidationError,
 		)
 
@@ -260,14 +260,14 @@ def reset_account_unit_type(unit_type):
 	account = _get_account_or_fallback()
 	if not account:
 		frappe.throw(
-			frappe._("No active Rental Account found. Please complete setup first."),
+			frappe._("لم يتم العثور على حساب إيجار نشط. يرجى إكمال الإعداد أولاً."),
 			frappe.PermissionError,
 		)
 
 	type_doc = frappe.get_doc("Unit Type", unit_type)
 	if not int(type_doc.is_system or 0):
 		frappe.throw(
-			frappe._("Account-level reset is only supported on System Unit Types."),
+			frappe._("إعادة التعيين على مستوى الحساب مدعومة فقط على أنواع الوحدات النظامية."),
 			frappe.ValidationError,
 		)
 
@@ -297,14 +297,14 @@ def get_unit_type_attributes(unit_type):
 	account = _get_account_or_fallback()
 	if not account:
 		frappe.throw(
-			frappe._("No active Rental Account found. Please complete setup first."),
+			frappe._("لم يتم العثور على حساب إيجار نشط. يرجى إكمال الإعداد أولاً."),
 			frappe.PermissionError,
 		)
 
 	type_doc = frappe.get_doc("Unit Type", unit_type)
 	if not int(type_doc.is_system or 0):
 		frappe.throw(
-			frappe._("Customization is only supported on System Unit Types."),
+			frappe._("التخصيص مدعوم فقط على أنواع الوحدات النظامية."),
 			frappe.ValidationError,
 		)
 
@@ -351,14 +351,14 @@ def get_available_attributes(unit_type):
 	account = _get_account_or_fallback()
 	if not account:
 		frappe.throw(
-			frappe._("No active Rental Account found. Please complete setup first."),
+			frappe._("لم يتم العثور على حساب إيجار نشط. يرجى إكمال الإعداد أولاً."),
 			frappe.PermissionError,
 		)
 
 	type_doc = frappe.get_doc("Unit Type", unit_type)
 	if not int(type_doc.is_system or 0):
 		frappe.throw(
-			frappe._("Customization is only supported on System Unit Types."),
+			frappe._("التخصيص مدعوم فقط على أنواع الوحدات النظامية."),
 			frappe.ValidationError,
 		)
 
@@ -391,7 +391,7 @@ def save_account_unit_type_attributes(unit_type, attributes):
 	account = _get_account_or_fallback()
 	if not account:
 		frappe.throw(
-			frappe._("No active Rental Account found. Please complete setup first."),
+			frappe._("لم يتم العثور على حساب إيجار نشط. يرجى إكمال الإعداد أولاً."),
 			frappe.PermissionError,
 		)
 
@@ -399,7 +399,7 @@ def save_account_unit_type_attributes(unit_type, attributes):
 	type_doc = frappe.get_doc("Unit Type", unit_type)
 	if not int(type_doc.is_system or 0):
 		frappe.throw(
-			frappe._("Customization is only supported on System Unit Types."),
+			frappe._("التخصيص مدعوم فقط على أنواع الوحدات النظامية."),
 			frappe.ValidationError,
 		)
 
@@ -409,12 +409,12 @@ def save_account_unit_type_attributes(unit_type, attributes):
 		attr_name = item.get("attribute") or item.get("name")
 		if not attr_name:
 			frappe.throw(
-				frappe._("Invalid attribute in list."),
+				frappe._("خاصية غير صالحة في القائمة."),
 				frappe.ValidationError,
 			)
 		if attr_name in seen:
 			frappe.throw(
-				frappe._("Duplicate attribute in list."),
+				frappe._("خاصية مكررة في القائمة."),
 				frappe.ValidationError,
 			)
 		seen.add(attr_name)
@@ -424,12 +424,12 @@ def save_account_unit_type_attributes(unit_type, attributes):
 		)
 		if not attr:
 			frappe.throw(
-				frappe._("Attribute '{0}' does not exist.").format(attr_name),
+				frappe._("الخاصية '{0}' غير موجودة.").format(attr_name),
 				frappe.ValidationError,
 			)
 		if not int(attr.is_system or 0):
 			frappe.throw(
-				frappe._("Only System Attributes can be used in Account configuration."),
+				frappe._("يمكن استخدام الخصائص النظامية فقط في تكوين الحساب."),
 				frappe.ValidationError,
 			)
 
@@ -477,14 +477,14 @@ def reset_account_unit_type_attributes(unit_type):
 	account = _get_account_or_fallback()
 	if not account:
 		frappe.throw(
-			frappe._("No active Rental Account found. Please complete setup first."),
+			frappe._("لم يتم العثور على حساب إيجار نشط. يرجى إكمال الإعداد أولاً."),
 			frappe.PermissionError,
 		)
 
 	type_doc = frappe.get_doc("Unit Type", unit_type)
 	if not int(type_doc.is_system or 0):
 		frappe.throw(
-			frappe._("Customization is only supported on System Unit Types."),
+			frappe._("التخصيص مدعوم فقط على أنواع الوحدات النظامية."),
 			frappe.ValidationError,
 		)
 

@@ -41,7 +41,7 @@ class AccountUnitTypeAttribute(Document):
 		is_system = frappe.db.get_value("Unit Type", self.unit_type, "is_system")
 		if not is_system:
 			frappe.throw(
-				frappe._("Customization is only supported on System Unit Types."),
+				frappe._("التخصيص مدعوم فقط على أنواع الوحدات النظامية."),
 				frappe.ValidationError,
 			)
 
@@ -51,7 +51,7 @@ class AccountUnitTypeAttribute(Document):
 		is_system = frappe.db.get_value("Unit Attribute", self.attribute, "is_system")
 		if not is_system:
 			frappe.throw(
-				frappe._("Only System Attributes can be used in Account configuration."),
+				frappe._("يمكن استخدام الخصائص النظامية فقط في تكوين الحساب."),
 				frappe.ValidationError,
 			)
 
@@ -68,7 +68,7 @@ class AccountUnitTypeAttribute(Document):
 		if frappe.db.exists("Account Unit Type Attribute", filters):
 			frappe.throw(
 				frappe._(
-					"Duplicate Account Unit Type Attribute for account {0}, unit type {1}, attribute {2}."
+					"تكرار خاصية نوع الوحدة للحساب {0}، نوع الوحدة {1}، الخاصية {2}."
 				).format(self.rental_account, self.unit_type, self.attribute),
 				frappe.ValidationError,
 			)
@@ -87,6 +87,6 @@ class AccountUnitTypeAttribute(Document):
 		current_user = frappe.session.user
 		if current_user != "Administrator" and current_user != owner_user:
 			frappe.throw(
-				frappe._("You do not have permission to configure this Rental Account."),
+				frappe._("ليس لديك صلاحية لتكوين حساب الإيجار هذا."),
 				frappe.PermissionError,
 			)

@@ -12,7 +12,7 @@ class RentalBuilding(frappe.model.document.Document):
 
 	def validate(self):
 		if not self.rental_account and not is_system_manager():
-			frappe.throw(frappe._("Rental Account is required."))
+			frappe.throw(frappe._("حساب الإيجار مطلوب."))
 		assert_account_access(self)
 
 		# Building name uniqueness per rental_account

@@ -21,12 +21,12 @@ def get_current_rental_account() -> str | None:
 
 	if not accounts:
 		raise frappe.PermissionError(
-			frappe._("You are not linked to any Rental Account. Please contact the system administrator.")
+			frappe._("أنت غير مرتبط بأي حساب إيجار. يرجى الاتصال بمسؤول النظام.")
 		)
 
 	if len(accounts) > 1:
 		raise frappe.ValidationError(
-			frappe._("Multiple Rental Accounts found for user {0}. Please contact the system administrator.").format(
+			frappe._("تم العثور على عدة حسابات إيجار للمستخدم {0}. يرجى الاتصال بمسؤول النظام.").format(
 				user
 			)
 		)
@@ -35,7 +35,7 @@ def get_current_rental_account() -> str | None:
 
 	if not account.is_active:
 		raise frappe.PermissionError(
-			frappe._("Your Rental Account is disabled. Please contact the system administrator.")
+			frappe._("حساب الإيجار الخاص بك معطل. يرجى الاتصال بمسؤول النظام.")
 		)
 
 	return account.name
@@ -69,7 +69,7 @@ def assert_account_access(doc) -> None:
 		return
 	if doc.rental_account != account:
 		raise frappe.PermissionError(
-			frappe._("You do not have access to this Rental Account's data")
+			frappe._("ليس لديك صلاحية الوصول إلى بيانات حساب الإيجار هذا")
 		)
 
 
@@ -85,5 +85,5 @@ def assert_same_account(*docs) -> None:
 			continue
 		if doc.rental_account != account:
 			raise frappe.PermissionError(
-				frappe._("All referenced documents must belong to the same Rental Account")
+				frappe._("يجب أن تنتمي جميع المستندات المرجعية إلى نفس حساب الإيجار")
 			)

@@ -19,7 +19,7 @@ class UnitType(Document):
 				continue
 			if row.attribute in seen:
 				frappe.throw(
-					frappe._("Attribute is already assigned to this Unit Type"),
+					frappe._("الخاصية معينة مسبقًا لنوع الوحدة هذا"),
 					frappe.ValidationError,
 				)
 			seen.add(row.attribute)
@@ -60,12 +60,12 @@ class UnitType(Document):
 			if account is None:
 				if not self.rental_account:
 					frappe.throw(
-						frappe._("Custom Unit Types must belong to a Rental Account"),
+						frappe._("أنواع الوحدات المخصصة يجب أن تنتمي إلى حساب إيجار"),
 						frappe.ValidationError,
 					)
 				if not frappe.db.exists("Rental Account", {"name": self.rental_account, "is_active": 1}):
 					frappe.throw(
-						frappe._("Custom Unit Types must belong to a Rental Account"),
+						frappe._("أنواع الوحدات المخصصة يجب أن تنتمي إلى حساب إيجار"),
 						frappe.ValidationError,
 					)
 				return
@@ -73,7 +73,7 @@ class UnitType(Document):
 				self.rental_account = account
 			if self.rental_account != account:
 				frappe.throw(
-					frappe._("You can only create Unit Types for your own Rental Account"),
+					frappe._("يمكنك إنشاء أنواع الوحدات فقط لحساب الإيجار الخاص بك"),
 					frappe.PermissionError,
 				)
 
@@ -86,7 +86,7 @@ class UnitType(Document):
 		existing = frappe.db.exists("Unit Type", filters)
 		if existing:
 			frappe.throw(
-				frappe._("Unit Type code '{0}' is already in use").format(self.code),
+				frappe._("رمز نوع الوحدة '{0}' مستخدم مسبقًا").format(self.code),
 				frappe.ValidationError,
 			)
 
@@ -97,14 +97,14 @@ class UnitType(Document):
 			account = get_current_rental_account()
 			if account is not None:
 				frappe.throw(
-					frappe._("System Unit Types cannot be deleted by Property Owners"),
+					frappe._("لا يمكن حذف أنواع الوحدات النظامية من قبل ملاك العقارات"),
 					frappe.PermissionError,
 				)
 		# Check if any units reference this type
 		units = frappe.db.count("Rental Unit", {"unit_type": self.name})
 		if units > 0:
 			frappe.throw(
-				frappe._("Cannot delete Unit Type '{0}' because {1} unit(s) are using it").format(
+				frappe._("لا يمكن حذف نوع الوحدة '{0}' لوجود {1} وحدة/وحدات تستخدمه").format(
 					self.type_name, units
 				),
 				frappe.ValidationError,

@@ -15,7 +15,7 @@ class RentalAccount(Document):
 		)
 		if existing:
 			frappe.throw(
-				frappe._("User {0} is already linked to Rental Account {1}").format(
+				frappe._("المستخدم {0} مرتبط مسبقًا بحساب الإيجار {1}").format(
 					self.owner_user, existing
 				),
 				frappe.ValidationError,

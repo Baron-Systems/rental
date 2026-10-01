@@ -170,8 +170,8 @@ def validate_capability_removal(unit_name: str, capability_code: str) -> None:
 	if has_blocking_metered_contract(unit_name, due_type_code):
 		frappe.throw(
 			frappe._(
-				"Cannot remove meter capability '{0}' because this unit has an active "
-				"or future-approved metered contract using this due type."
+				"لا يمكن إزالة قدرة العداد '{0}' لأن هذه الوحدة لديها عقد فعّال "
+				"أو مستقبلي معتمد يستخدم الاحتساب حسب القراءة بهذا النوع من الالتزام."
 			).format(capability_code),
 			frappe.ValidationError,
 		)

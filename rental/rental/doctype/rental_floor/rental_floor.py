@@ -13,7 +13,7 @@ class RentalFloor(frappe.model.document.Document):
 
 	def validate(self):
 		if not self.rental_account and not is_system_manager():
-			frappe.throw(frappe._("Rental Account is required."))
+			frappe.throw(frappe._("حساب الإيجار مطلوب."))
 		assert_account_access(self)
 
 		# Floor data is read-only after creation (matches old app: PUT /api/floors/[id] → 403 always)
@@ -27,14 +27,14 @@ class RentalFloor(frappe.model.document.Document):
 			building_account = frappe.db.get_value("Rental Building", self.building, "rental_account")
 			if building_account != self.rental_account:
 				frappe.throw(
-					frappe._("Building must belong to the same Rental Account.")
+					frappe._("يجب أن ينتمي العقار إلى نفس حساب الإيجار.")
 				)
 
 			if self.is_new():
 				is_active = frappe.db.get_value("Rental Building", self.building, "is_active")
 				if not is_active:
 					frappe.throw(
-						frappe._("Cannot add floor to a disabled building.")
+						frappe._("لا يمكن إضافة طابق لعقار غير مفعّل.")
 					)
 
 		existing = frappe.db.exists(

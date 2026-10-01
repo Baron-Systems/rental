@@ -15,7 +15,7 @@ class RentalDue(Document):
 
 	def validate(self):
 		if not self.rental_account and not is_system_manager():
-			frappe.throw(frappe._("Rental Account is required."))
+			frappe.throw(frappe._("حساب الإيجار مطلوب."))
 		assert_account_access(self)
 
 		# Archive protection — blocks create/edit on dues of archived contracts.
@@ -27,7 +27,7 @@ class RentalDue(Document):
 		if self.source_type == "auto_contract" and not self.is_new() and not self.flags.from_generation:
 			original = frappe.db.get_value("Rental Due", self.name, "source_type")
 			if original == "auto_contract":
-				frappe.throw(frappe._("Auto-contract dues cannot be edited individually."))
+				frappe.throw(frappe._("لا يمكن تعديل الالتزامات التلقائية للعقود بشكل فردي."))
 
 		# Metered due: compute consumption and amount on validate
 		if self.calculation_method == "metered" and self.current_meter_reading is not None:
