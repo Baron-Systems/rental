@@ -1,0 +1,1 @@
+import{o as a,h as r,L as s,n}from"./vendor.bf14db2d.js";const p={props:{align:{type:String,default:"right"}},setup(t){return(e,o)=>(a(),r("td",{class:n(["px-[18px] py-3.5 text-sm text-navy-700 whitespace-nowrap",t.align==="center"?"text-center":"text-right"])},[s(e.$slots,"default")],2))}};export{p as default};

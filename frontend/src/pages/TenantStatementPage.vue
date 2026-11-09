@@ -78,11 +78,13 @@ import Pagination from '@/components/ui/Pagination.vue'
 import { callApi, formatMoney, formatDate, extractError } from '@/composables/useApi'
 import { useSession } from '@/composables/useSession'
 import { useToast } from '@/composables/useToast'
+import { usePrintPreview } from '@/composables/usePrintPreview'
 
 const router = useRouter()
 const route = useRoute()
 const session = useSession()
 const toast = useToast()
+const printPreview = usePrintPreview()
 
 const currency = computed(() => session.state.account?.settings?.currency || 'ILS')
 const lessorLogo = computed(() => session.state.account?.settings?.logo || '')
@@ -180,8 +182,6 @@ async function handlePrint() {
 }
 
 function _openPrintWindow(data, tenantDoc, singleContract) {
-  const w = window.open('', '_blank', 'width=900,height=700')
-  if (!w) { toast.error('يرجى السماح بالنوافذ المنبثقة للطباعة'); return }
   const cur = currency.value
   const showUnitCol = !singleContract
   const selectedContract = singleContract ? tenantDoc.contracts?.find(c => c.name === filters.value.contractId) : null
@@ -205,7 +205,7 @@ function _openPrintWindow(data, tenantDoc, singleContract) {
 
   const balanceColor = data.closingBalance > 0 ? 'red' : data.closingBalance < 0 ? 'green' : ''
 
-  w.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+  printPreview.show(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
     <title>كشف حساب المستأجر</title><style>
       body{font-family:Arial,sans-serif;padding:24px;color:#1a2238}
       h1{font-size:20px;margin:0 0 4px;text-align:center} h2{font-size:14px;color:#64748b;font-weight:normal;margin:0 0 8px}
@@ -247,8 +247,7 @@ function _openPrintWindow(data, tenantDoc, singleContract) {
       </div>
     </div>
     <script>window.onload=function(){window.print()}<\/script>
-    </body></html>`)
-  w.document.close()
+    </body></html>`, 'طباعة كشف الحساب')
 }
 
 onMounted(async () => {

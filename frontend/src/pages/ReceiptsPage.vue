@@ -224,186 +224,7 @@
     </div>
 
     <!-- Create Form Modal -->
-    <div v-if="showForm" class="fixed inset-x-0 bottom-0 top-16 z-50 flex items-center justify-center p-4 md:p-6 print:hidden" dir="rtl">
-      <div class="absolute inset-0 bg-navy-950/20 backdrop-blur-sm" @click="showForm = false" />
-      <div class="relative z-10 w-full max-w-2xl max-h-[calc(100%-32px)] md:max-h-[calc(100%-48px)] overflow-hidden rounded-[14px] border border-ivory-300 bg-white shadow-xl animate-scale-in flex flex-col">
-        <div class="shrink-0 p-6 pb-4 flex items-center justify-between">
-          <div>
-            <h3 class="text-base font-bold text-navy-900">إنشاء سند</h3>
-            <p class="mt-0.5 text-sm text-navy-400">سجل دفعة أو رد مبلغ لمستأجر</p>
-          </div>
-          <button
-            class="inline-flex h-9 w-9 items-center justify-center rounded-[10px] text-navy-400 transition-colors hover:bg-ivory-200 hover:text-navy-800"
-            @click="showForm = false"
-          >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-          </button>
-        </div>
-
-        <form class="flex flex-col min-h-0 flex-1" @submit.prevent="handleSubmit">
-          <div ref="formBodyRef" class="flex-1 min-h-0 overflow-y-auto p-6 pt-4">
-            <Alert v-if="error" type="error" title="تعذّر إنشاء سند القبض" :message="error" class="mb-4" />
-
-            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div class="space-y-1.5">
-                <label class="text-sm font-medium text-navy-800">
-                  المستأجر <span class="text-red-500">*</span>
-                </label>
-                <SearchableTenantSelect
-                  :model-value="formData.tenantId"
-                  :value-label="selectedFormTenantName"
-                  placeholder="اختر المستأجر"
-                  @select="handleFormTenantSelect"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="text-sm font-medium text-navy-800">
-                  العقد <span class="text-red-500">*</span>
-                </label>
-                <select
-                  class="input-premium"
-                  :value="formData.contractId"
-                  :disabled="!formData.tenantId || formContractsLoading || formContracts.length === 0"
-                  @change="handleContractChange"
-                >
-                  <option value="">{{ formContractPlaceholder }}</option>
-                  <option v-for="c in formContracts" :key="c.name" :value="c.name">{{ formatContractLabel(c) }}</option>
-                </select>
-                <span v-if="selectedContract" class="flex items-center gap-1 text-xs text-navy-400">
-                  <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
-                  الوحدة {{ selectedContract.unit_number || '—' }} — {{ selectedContract.building_name || '—' }}
-                </span>
-              </div>
-
-              <!-- Contract Balance Card -->
-              <div v-if="formData.contractId && contractBalance !== null" class="md:col-span-2 rounded-lg border border-ivory-300 bg-ivory-50 px-4 py-3">
-                <div class="flex items-center justify-between gap-3">
-                  <div class="flex items-center gap-2">
-                    <svg class="h-4 w-4 text-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
-                    <span class="text-sm font-medium text-navy-700">رصيد العقد</span>
-                    <span
-                      :class="contractBalance > 0 ? 'text-red-600' : contractBalance < 0 ? 'text-emerald-600' : 'text-navy-400'"
-                      class="text-sm font-bold"
-                    >{{ contractBalanceLabel }}</span>
-                  </div>
-                  <button
-                    v-if="canShowSettlement"
-                    type="button"
-                    class="btn-premium btn-outline text-sm inline-flex items-center gap-1.5"
-                    @click="handleSettleBalance"
-                  >
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                    تسوية كامل الرصيد
-                  </button>
-                </div>
-              </div>
-
-              <!-- Transaction Type -->
-              <div v-if="showTransactionType" class="space-y-1.5">
-                <label class="text-sm font-medium text-navy-800">نوع الحركة</label>
-                <select class="input-premium" v-model="formData.transactionType" @change="handleTransactionTypeChange">
-                  <option value="receipt">قبض من المستأجر</option>
-                  <option v-if="canRefund" value="refund">رد للمستأجر</option>
-                </select>
-              </div>
-
-              <div class="space-y-1.5">
-                <label class="text-sm font-medium text-navy-800">
-                  التاريخ <span class="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  dir="ltr"
-                  class="input-premium"
-                  v-model="formData.receiptDate"
-                  required
-                />
-              </div>
-              <div class="space-y-1.5">
-                <label class="text-sm font-medium text-navy-800">
-                  المبلغ <span class="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  class="input-premium"
-                  :class="{ 'border-red-400': amountError }"
-                  v-model="formData.amount"
-                  required
-                />
-                <span v-if="amountError" class="text-xs text-red-500">{{ amountError }}</span>
-              </div>
-              <div class="space-y-1.5">
-                <label class="text-sm font-medium text-navy-800">طريقة الدفع</label>
-                <select class="input-premium" v-model="formData.paymentMethod">
-                  <option v-for="o in paymentMethodOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
-                </select>
-              </div>
-
-              <template v-if="formData.paymentMethod === 'cheque'">
-                <div class="space-y-1.5">
-                  <label class="text-sm font-medium text-navy-800">
-                    رقم الشيك <span class="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="رقم الشيك"
-                    class="input-premium"
-                    v-model="formData.referenceNumber"
-                    required
-                  />
-                </div>
-                <div class="space-y-1.5">
-                  <label class="text-sm font-medium text-navy-800">تاريخ الشيك</label>
-                  <input
-                    type="date"
-                    dir="ltr"
-                    class="input-premium"
-                    v-model="formData.chequeDate"
-                  />
-                </div>
-                <div class="space-y-1.5">
-                  <label class="text-sm font-medium text-navy-800">اسم البنك</label>
-                  <input
-                    type="text"
-                    placeholder="اسم البنك"
-                    class="input-premium"
-                    v-model="formData.bankName"
-                  />
-                </div>
-              </template>
-
-              <div class="space-y-1.5 md:col-span-2">
-                <ReceiptAttachmentField
-                  v-model="formData.attachment"
-                  :payment-method="formData.paymentMethod"
-                />
-              </div>
-
-              <div class="space-y-1.5 md:col-span-2">
-                <label class="text-sm font-medium text-navy-800">ملاحظات</label>
-                <input
-                  type="text"
-                  placeholder="ملاحظات إضافية..."
-                  class="input-premium"
-                  v-model="formData.notes"
-                />
-              </div>
-            </div>
-          </div>
-          <div class="shrink-0 px-6 py-4" :class="{ 'border-t border-ivory-300': bodyHasOverflow }">
-            <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <button type="button" class="btn-premium btn-outline" @click="showForm = false">إلغاء</button>
-              <button type="submit" class="btn-premium btn-gold inline-flex items-center gap-1.5" :disabled="creating">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
-                حفظ السند
-              </button>
-            </div>
-          </div>
-        </form>
-      </div>
-    </div>
+    <ReceiptCreateModal v-if="showForm" @close="showForm = false" @created="filters.page = 1; loadReceipts()" />
 
     <!-- Print Document -->
     <div v-if="printData" class="print-only">
@@ -419,7 +240,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import AppLayout from '@/layouts/AppLayout.vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import Card from '@/components/ui/Card.vue'
@@ -431,7 +252,7 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import Alert from '@/components/ui/Alert.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import SearchableTenantSelect from '@/components/ui/SearchableTenantSelect.vue'
-import ReceiptAttachmentField from '@/components/ReceiptAttachmentField.vue'
+import ReceiptCreateModal from '@/components/receipt/ReceiptCreateModal.vue'
 import ReceiptsListPrintDocument from '@/components/receipt/ReceiptsListPrintDocument.vue'
 import { callApi, formatMoney, formatDate, extractError } from '@/composables/useApi'
 import { useSession } from '@/composables/useSession'
@@ -477,36 +298,9 @@ const receipts = ref([])
 const loading = ref(true)
 const showForm = ref(false)
 const showAdvanced = ref(false)
-const error = ref('')
 const filterError = ref('')
-const formBodyRef = ref(null)
-const bodyHasOverflow = ref(false)
-const creating = ref(false)
 
-const formData = reactive({
-  tenantId: '',
-  contractId: '',
-  transactionType: 'receipt',
-  receiptDate: new Date().toISOString().split('T')[0],
-  amount: '',
-  paymentMethod: 'cash',
-  referenceNumber: '',
-  chequeDate: '',
-  bankName: '',
-  attachment: null,
-  notes: '',
-})
-
-const contractBalance = ref(null)
-const contractBalanceLoading = ref(false)
-const canRefund = ref(false)
-const canSettle = ref(false)
-const isContractArchived = ref(false)
-
-const selectedFormTenantName = ref('')
 const selectedFilterTenantName = ref('')
-const formContracts = ref([])
-const formContractsLoading = ref(false)
 const filterContracts = ref([])
 const filterContractsLoading = ref(false)
 
@@ -527,14 +321,6 @@ const stats = ref({ total: 0, draft: 0, approved: 0, cancelled: 0 })
 const printing = ref(false)
 const printLoading = ref(false)
 const printData = ref(null)
-
-const selectedContract = computed(() => formContracts.value.find((c) => c.name === formData.contractId))
-
-const formContractPlaceholder = computed(() => {
-  if (!formData.tenantId) return 'اختر المستأجر أولاً'
-  if (formContractsLoading.value) return 'جاري تحميل العقود...'
-  return 'اختر العقد'
-})
 
 const activeAdvancedCount = computed(() => {
   return [filters.contractId, filters.paymentMethod, filters.fromDate, filters.toDate].filter(Boolean).length
@@ -637,15 +423,6 @@ async function fetchContractsForTenant(tenantId) {
   return res.contracts || []
 }
 
-async function loadFormContractsForTenant(tenantId) {
-  formContractsLoading.value = true
-  formContracts.value = []
-  const list = await fetchContractsForTenant(tenantId)
-  formContracts.value = list
-  formContractsLoading.value = false
-  return list
-}
-
 async function loadFilterContractsForTenant(tenantId) {
   filterContractsLoading.value = true
   filterContracts.value = []
@@ -661,28 +438,6 @@ function formatContractLabel(c) {
   return `${c.contract_number} — ${building} — الوحدة ${unit}`
 }
 
-async function handleFormTenantSelect(item) {
-  const tenantId = item?.name || ''
-  const fullName = item?.full_name || ''
-  selectedFormTenantName.value = fullName
-  formData.tenantId = tenantId
-  formData.contractId = ''
-  formData.transactionType = 'receipt'
-  formData.amount = ''
-  formContracts.value = []
-  contractBalance.value = null
-  canRefund.value = false
-  canSettle.value = false
-  isContractArchived.value = false
-  if (tenantId) {
-    const list = await loadFormContractsForTenant(tenantId)
-    if (list.length === 1) {
-      formData.contractId = list[0].name
-      await loadContractSettlementInfo(list[0].name)
-    }
-  }
-}
-
 async function handleFilterTenantSelect(item) {
   const tenantId = item?.name || ''
   const fullName = item?.full_name || ''
@@ -695,86 +450,6 @@ async function handleFilterTenantSelect(item) {
     await loadFilterContractsForTenant(tenantId)
   }
   loadReceipts()
-}
-
-async function handleContractChange(e) {
-  formData.contractId = e.target.value
-  formData.transactionType = 'receipt'
-  formData.amount = ''
-  contractBalance.value = null
-  canRefund.value = false
-  canSettle.value = false
-  isContractArchived.value = false
-  if (formData.contractId) {
-    await loadContractSettlementInfo(formData.contractId)
-  }
-}
-
-async function loadContractSettlementInfo(contractId) {
-  contractBalanceLoading.value = true
-  try {
-    const res = await callApi('rental.rental.api.contract.get_contract_settlement_info', { name: contractId })
-    contractBalance.value = res.balance
-    canRefund.value = res.can_refund
-    canSettle.value = res.can_settle
-    isContractArchived.value = res.is_archived
-  } catch {
-    contractBalance.value = null
-    canRefund.value = false
-    canSettle.value = false
-    isContractArchived.value = false
-  } finally {
-    contractBalanceLoading.value = false
-  }
-}
-
-const contractBalanceLabel = computed(() => {
-  if (contractBalance.value === null) return ''
-  const abs = Math.abs(contractBalance.value)
-  const formatted = formatMoney(abs, currency.value)
-  if (contractBalance.value > 0) return `على المستأجر: ${formatted}`
-  if (contractBalance.value < 0) return `لصالح المستأجر: ${formatted}`
-  return `رصيد العقد: ${formatted}`
-})
-
-const showTransactionType = computed(() => {
-  if (!formData.contractId) return false
-  if (isContractArchived.value) return false
-  return canRefund.value
-})
-
-const canShowSettlement = computed(() => {
-  if (!canSettle.value) return false
-  if (contractBalance.value === null || contractBalance.value === 0) return false
-  if (contractBalance.value > 0) return true
-  if (contractBalance.value < 0 && canRefund.value) return true
-  return false
-})
-
-const amountError = computed(() => {
-  const amt = parseFloat(formData.amount)
-  if (!formData.amount || isNaN(amt)) return ''
-  if (amt <= 0) return 'المبلغ يجب أن يكون موجبًا'
-  if (formData.transactionType === 'refund' && contractBalance.value !== null) {
-    const credit = Math.abs(contractBalance.value)
-    if (amt > credit + 0.005) return 'مبلغ الرد لا يمكن أن يتجاوز الرصيد الدائن للعقد.'
-  }
-  return ''
-})
-
-function handleSettleBalance() {
-  if (contractBalance.value === null || contractBalance.value === 0) return
-  if (contractBalance.value > 0) {
-    formData.transactionType = 'receipt'
-    formData.amount = contractBalance.value.toFixed(2)
-  } else if (contractBalance.value < 0 && canRefund.value) {
-    formData.transactionType = 'refund'
-    formData.amount = Math.abs(contractBalance.value).toFixed(2)
-  }
-}
-
-function handleTransactionTypeChange() {
-  formData.amount = ''
 }
 
 function handleFilterContractChange(e) {
@@ -826,59 +501,6 @@ function clearAllFilters() {
 function changePage(page) {
   filters.page = page
   loadReceipts()
-}
-
-async function handleSubmit() {
-  error.value = ''
-  creating.value = true
-  try {
-    const payload = {
-      tenant: formData.tenantId,
-      contract: formData.contractId,
-      transaction_type: formData.transactionType,
-      receipt_date: formData.receiptDate,
-      amount: formData.amount,
-      payment_method: formData.paymentMethod,
-      notes: formData.notes || null,
-      attachment: formData.attachment,
-    }
-    if (formData.paymentMethod === 'cheque') {
-      payload.reference_number = formData.referenceNumber
-      payload.cheque_date = formData.chequeDate || null
-      payload.bank_name = formData.bankName || null
-    } else {
-      payload.reference_number = null
-      payload.cheque_date = null
-      payload.bank_name = null
-    }
-    await callApi('rental.rental.api.receipt.create_receipt', payload)
-    // Reset form
-    Object.assign(formData, {
-      tenantId: '',
-      contractId: '',
-      transactionType: 'receipt',
-      receiptDate: new Date().toISOString().split('T')[0],
-      amount: '',
-      paymentMethod: 'cash',
-      referenceNumber: '',
-      chequeDate: '',
-      bankName: '',
-      attachment: null,
-      notes: '',
-    })
-    formContracts.value = []
-    selectedFormTenantName.value = ''
-    contractBalance.value = null
-    canRefund.value = false
-    isContractArchived.value = false
-    showForm.value = false
-    filters.page = 1
-    loadReceipts()
-  } catch (err) {
-    error.value = extractError(err) || 'حدث خطأ'
-  } finally {
-    creating.value = false
-  }
 }
 
 async function handleDelete(r) {
@@ -973,24 +595,6 @@ function waitForImages() {
       img.addEventListener('error', onFinish)
     })
   })
-}
-
-// Watch form body overflow
-watch([showForm], async () => {
-  if (showForm.value) {
-    document.body.style.overflow = 'hidden'
-    await nextTick()
-    checkBodyOverflow()
-  } else {
-    document.body.style.overflow = ''
-    bodyHasOverflow.value = false
-  }
-})
-
-function checkBodyOverflow() {
-  const el = formBodyRef.value
-  if (!el) { bodyHasOverflow.value = false; return }
-  bodyHasOverflow.value = el.scrollHeight > el.clientHeight
 }
 
 onMounted(loadReceipts)

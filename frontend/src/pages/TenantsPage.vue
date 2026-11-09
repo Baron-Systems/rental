@@ -78,6 +78,17 @@
               <span class="font-semibold text-navy-800">{{ t.full_name }}</span>
             </TableCell>
             <TableCell>
+              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold tabular-nums" :class="balanceBadgeClass(t.balance)">
+                {{ formatMoney(t.balance, currency) }}
+              </span>
+            </TableCell>
+            <TableCell><span class="tabular-nums text-red-600">{{ formatMoney(t.totalDues, currency) }}</span></TableCell>
+            <TableCell><span class="tabular-nums text-emerald-600">{{ formatMoney(t.totalReceipts, currency) }}</span></TableCell>
+            <TableCell>
+              <span v-if="t.currentContractsCount > 0" class="text-sm text-navy-700">{{ t.currentContractsCount }} {{ (t.currentContractsCount === 1 || t.currentContractsCount === 2) ? 'عقد' : 'عقود' }}</span>
+              <span v-else class="text-navy-300">—</span>
+            </TableCell>
+            <TableCell>
               <div class="flex flex-col">
                 <span class="text-sm text-navy-700">{{ t.national_id || '—' }}</span>
                 <span v-if="t.phone" class="text-xs text-navy-400 inline-flex items-center gap-1" dir="ltr">
@@ -86,17 +97,6 @@
                 </span>
                 <span v-else class="text-xs text-navy-300">—</span>
               </div>
-            </TableCell>
-            <TableCell>
-              <span v-if="t.currentContractsCount > 0" class="text-sm text-navy-700">{{ t.currentContractsCount }} {{ (t.currentContractsCount === 1 || t.currentContractsCount === 2) ? 'عقد' : 'عقود' }}</span>
-              <span v-else class="text-navy-300">—</span>
-            </TableCell>
-            <TableCell><span class="tabular-nums text-red-600">{{ formatMoney(t.totalDues, currency) }}</span></TableCell>
-            <TableCell><span class="tabular-nums text-emerald-600">{{ formatMoney(t.totalReceipts, currency) }}</span></TableCell>
-            <TableCell>
-              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold tabular-nums" :class="balanceBadgeClass(t.balance)">
-                {{ formatMoney(t.balance, currency) }}
-              </span>
             </TableCell>
             <TableCell align="center">
               <div class="flex items-center justify-center gap-1" @click.stop>
@@ -143,11 +143,13 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import { callApi, formatMoney, extractError } from '@/composables/useApi'
 import { useSession } from '@/composables/useSession'
 import { useToast } from '@/composables/useToast'
+import { usePrintPreview } from '@/composables/usePrintPreview'
 import { useConfirm } from '@/composables/useConfirm'
 
 const router = useRouter()
 const session = useSession()
 const toast = useToast()
+const printPreview = usePrintPreview()
 const { confirm } = useConfirm()
 
 const currency = computed(() => session.state.account?.settings?.currency || 'ILS')
@@ -156,11 +158,11 @@ const lessorName = computed(() => session.state.account?.settings?.landlord_name
 
 const columns = [
   { key: 'name', label: 'المستأجر' },
-  { key: 'idphone', label: 'الهوية / الهاتف' },
-  { key: 'contracts', label: 'العقود الحالية' },
+  { key: 'balance', label: 'الرصيد' },
   { key: 'dues', label: 'المستحقات' },
   { key: 'receipts', label: 'الدفعات' },
-  { key: 'balance', label: 'الرصيد' },
+  { key: 'contracts', label: 'العقود الحالية' },
+  { key: 'idphone', label: 'الهوية / الهاتف' },
   { key: 'actions', label: 'إجراءات', align: 'center' },
 ]
 
@@ -327,8 +329,6 @@ function _filterSummary() {
 }
 
 function _openListPrintWindow(tenantsList, _statsObj, total) {
-  const w = window.open('', '_blank', 'width=1000,height=700')
-  if (!w) { toast.error('يرجى السماح بالنوافذ المنبثقة للطباعة'); return }
   const cur = currency.value
   const summary = _filterSummary()
   const hideContractCol = filters.value.contractState !== 'all'
@@ -357,7 +357,7 @@ function _openListPrintWindow(tenantsList, _statsObj, total) {
     </tr>`
   }).join('')
 
-  w.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+  printPreview.show(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
     <title>تقرير المستأجرين</title><style>
       body{font-family:Arial,sans-serif;padding:24px;color:#1a2238}
       .print-header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:8px;margin-bottom:12px}
@@ -388,8 +388,7 @@ function _openListPrintWindow(tenantsList, _statsObj, total) {
       <div><span class="label">الرصيد صفر:</span> <b>${zeroCount}</b> مستأجر</div>
     </div>
     <script>window.onload=function(){window.print()}<\/script>
-    </body></html>`)
-  w.document.close()
+    </body></html>`, 'طباعة قائمة المستأجرين')
 }
 
 onMounted(() => {

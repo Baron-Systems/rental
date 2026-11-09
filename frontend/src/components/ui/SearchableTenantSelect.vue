@@ -103,7 +103,7 @@ watch(() => props.modelValue, async (v) => {
       if (found) selectedLabel.value = found.full_name
     } catch { /* ignore */ }
   }
-})
+}, { immediate: true })
 
 watch(() => props.valueLabel, (v) => {
   if (props.modelValue && v) selectedLabel.value = v

@@ -1,0 +1,1 @@
+import{_ as o,o as r,h as s,L as t}from"./vendor.bf14db2d.js";const a={},n={class:"transition-colors hover:bg-gold-50/30"};function c(e,l){return r(),s("tr",n,[t(e.$slots,"default")])}var _=o(a,[["render",c]]);export{_ as default};

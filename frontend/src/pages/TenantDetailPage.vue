@@ -29,7 +29,15 @@
               <span v-if="tenant.guarantor_name">الكفيل: {{ tenant.guarantor_name }}<span v-if="tenant.guarantor_phone"> ({{ tenant.guarantor_phone }})</span></span>
             </div>
           </div>
-          <div class="flex items-center gap-2 shrink-0">
+          <div class="flex flex-wrap items-center gap-2 shrink-0">
+            <button type="button" class="btn-premium btn-outline inline-flex items-center gap-1.5" @click="showDueModal = true">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+              <span>التزام</span>
+            </button>
+            <button type="button" class="btn-premium btn-gold inline-flex items-center gap-1.5" @click="showReceiptModal = true">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+              <span>دفعة</span>
+            </button>
             <router-link :to="{ name: 'TenantEdit', params: { id: tenant.name } }" class="btn-premium btn-outline">تعديل</router-link>
             <button class="btn-premium btn-outline inline-flex items-center gap-1.5" :disabled="printing" @click="handlePrint">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
@@ -56,6 +64,18 @@
               </div>
             </div>
             <div class="flex items-center gap-2">
+              <button
+                type="button"
+                class="w-9 h-9 rounded-lg border border-ivory-300 flex items-center justify-center text-navy-500 hover:bg-gold-50 hover:text-gold-600 transition-colors disabled:opacity-50"
+                :title="statementFilter.sortOrder === 'asc' ? 'الترتيب: الأقدم أولاً (اضغط للعكس)' : 'الترتيب: الأحدث أولاً (اضغط للعكس)'"
+                :disabled="statementLoading"
+                @click="toggleSortOrder"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v16M7 4L3 8M7 4l4 4" :class="statementFilter.sortOrder === 'asc' ? 'text-gold-600' : 'opacity-40'" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20V4m0 16l-4-4m4 4l4-4" :class="statementFilter.sortOrder === 'desc' ? 'text-gold-600' : 'opacity-40'" />
+                </svg>
+              </button>
               <label class="text-xs text-navy-400">العقد</label>
               <select v-model="statementFilter.contractId" class="input-premium text-sm" :disabled="!tenant.contracts?.length" @change="handleContractFilterChange">
                 <option value="">كل العقود</option>
@@ -71,13 +91,13 @@
           </div>
           <DataTable v-else :columns="statementColumns">
             <TableRow v-for="(line, i) in statement.lines" :key="i">
-              <TableCell>{{ line.reference || '—' }}</TableCell>
               <TableCell>{{ formatDate(line.date) }}</TableCell>
               <TableCell>{{ line.typeName || line.type }}</TableCell>
-              <TableCell v-if="!statementFilter.contractId">{{ line.unit || '—' }}</TableCell>
+              <TableCell><span class="font-bold tabular-nums">{{ formatMoney(line.balance, currency) }}</span></TableCell>
               <TableCell><span v-if="line.debit > 0" class="text-red-600 font-medium tabular-nums">{{ formatMoney(line.debit, currency) }}</span><span v-else class="text-navy-300">-</span></TableCell>
               <TableCell><span v-if="line.credit > 0" class="text-emerald-600 font-medium tabular-nums">{{ formatMoney(line.credit, currency) }}</span><span v-else class="text-navy-300">-</span></TableCell>
-              <TableCell><span class="font-bold tabular-nums">{{ formatMoney(line.balance, currency) }}</span></TableCell>
+              <TableCell v-if="!statementFilter.contractId">{{ line.unit || '—' }}</TableCell>
+              <TableCell>{{ line.reference || '—' }}</TableCell>
             </TableRow>
           </DataTable>
 
@@ -135,6 +155,21 @@
         </Card>
       </div>
     </div>
+
+    <DueCreateModal
+      v-if="showDueModal && quickCreateTenant"
+      :tenant="quickCreateTenant"
+      :contract="statementFilter.contractId"
+      @close="showDueModal = false"
+      @created="refreshAfterCreate"
+    />
+    <ReceiptCreateModal
+      v-if="showReceiptModal && quickCreateTenant"
+      :tenant="quickCreateTenant"
+      :contract="statementFilter.contractId"
+      @close="showReceiptModal = false"
+      @created="refreshAfterCreate"
+    />
   </AppLayout>
 </template>
 
@@ -149,15 +184,19 @@ import TableRow from '@/components/ui/TableRow.vue'
 import TableCell from '@/components/ui/TableCell.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import Pagination from '@/components/ui/Pagination.vue'
+import DueCreateModal from '@/components/due/DueCreateModal.vue'
+import ReceiptCreateModal from '@/components/receipt/ReceiptCreateModal.vue'
 import { callApi, formatMoney, formatDate, extractError } from '@/composables/useApi'
 import { useSession } from '@/composables/useSession'
 import { useToast } from '@/composables/useToast'
+import { usePrintPreview } from '@/composables/usePrintPreview'
 import { getContractDisplayStatus } from '@/utils/contractUtils.js'
 
 const router = useRouter()
 const route = useRoute()
 const session = useSession()
 const toast = useToast()
+const printPreview = usePrintPreview()
 const currency = computed(() => session.state.account?.settings?.currency || 'ILS')
 const lessorLogo = computed(() => session.state.account?.settings?.logo || '')
 const lessorName = computed(() => session.state.account?.settings?.landlord_name || '')
@@ -168,20 +207,20 @@ const loading = ref(true)
 const statementLoading = ref(false)
 const printing = ref(false)
 
-const statementFilter = ref({ contractId: '' })
+const statementFilter = ref({ contractId: '', sortOrder: 'desc' })
 
 const statementColumns = computed(() => {
   const cols = [
-    { key: 'ref', label: 'المرجع' },
     { key: 'date', label: 'التاريخ' },
     { key: 'type', label: 'النوع' },
+    { key: 'balance', label: 'الرصيد' },
+    { key: 'debit', label: 'المبلغ المستحق' },
+    { key: 'credit', label: 'المبلغ المدفوع' },
   ]
   if (!statementFilter.value.contractId) {
     cols.push({ key: 'unit', label: 'الوحدة' })
   }
-  cols.push({ key: 'debit', label: 'المبلغ المستحق' })
-  cols.push({ key: 'credit', label: 'المبلغ المدفوع' })
-  cols.push({ key: 'balance', label: 'الرصيد' })
+  cols.push({ key: 'ref', label: 'المرجع' })
   return cols
 })
 
@@ -243,12 +282,34 @@ async function fetchStatement(page = 1) {
       name: route.params.id,
       contract: statementFilter.value.contractId || undefined,
       page,
+      sort_order: statementFilter.value.sortOrder,
     })
   } catch (e) {
     toast.error(extractError(e))
   } finally {
     statementLoading.value = false
   }
+}
+
+// Quick-create modals (due / receipt) pre-filled with this tenant and the
+// contract currently selected in the statement filter, if any.
+const showDueModal = ref(false)
+const showReceiptModal = ref(false)
+const quickCreateTenant = computed(() => tenant.value ? { name: tenant.value.name, full_name: tenant.value.full_name } : null)
+
+// Refresh balances + statement in place after a due/receipt is created (no full-page spinner).
+async function refreshAfterCreate() {
+  try {
+    tenant.value = await callApi('rental.rental.api.tenant.get_tenant', { name: route.params.id })
+  } catch (e) {
+    toast.error(extractError(e))
+  }
+  await fetchStatement(1)
+}
+
+function toggleSortOrder() {
+  statementFilter.value.sortOrder = statementFilter.value.sortOrder === 'asc' ? 'desc' : 'asc'
+  fetchStatement(1)
 }
 
 function handleContractFilterChange() {
@@ -267,6 +328,7 @@ async function handlePrint() {
       name: route.params.id,
       contract: statementFilter.value.contractId || undefined,
       print: 1,
+      sort_order: 'asc',
     })
     _openPrintWindow(data, tenant.value, !!statementFilter.value.contractId)
   } catch (e) {
@@ -277,8 +339,6 @@ async function handlePrint() {
 }
 
 function _openPrintWindow(data, tenantDoc, singleContract) {
-  const w = window.open('', '_blank', 'width=900,height=700')
-  if (!w) { toast.error('يرجى السماح بالنوافذ المنبثقة للطباعة'); return }
   const cur = currency.value
   const showUnitCol = !singleContract
   const selectedContract = singleContract ? tenantDoc.contracts?.find(c => c.name === statementFilter.value.contractId) : null
@@ -302,7 +362,7 @@ function _openPrintWindow(data, tenantDoc, singleContract) {
 
   const balanceColor = data.closingBalance > 0 ? 'red' : data.closingBalance < 0 ? 'green' : ''
 
-  w.document.write(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
+  printPreview.show(`<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
     <title>كشف حساب المستأجر</title><style>
       body{font-family:Arial,sans-serif;padding:24px;color:#1a2238}
       h1{font-size:20px;margin:0 0 4px;text-align:center} h2{font-size:14px;color:#64748b;font-weight:normal;margin:0 0 8px}
@@ -344,8 +404,7 @@ function _openPrintWindow(data, tenantDoc, singleContract) {
       </div>
     </div>
     <script>window.onload=function(){window.print()}<\/script>
-    </body></html>`)
-  w.document.close()
+    </body></html>`, 'طباعة كشف الحساب')
 }
 
 onMounted(fetchTenant)

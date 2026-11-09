@@ -42,6 +42,7 @@
   <router-view v-else />
   <ToastContainer />
   <ConfirmDialog />
+  <PrintPreview />
 </template>
 
 <script setup>
@@ -49,6 +50,7 @@ import { useRouter } from 'vue-router'
 import { useSession } from '@/composables/useSession'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue'
+import PrintPreview from '@/components/print/PrintPreview.vue'
 
 const session = useSession()
 const router = useRouter()

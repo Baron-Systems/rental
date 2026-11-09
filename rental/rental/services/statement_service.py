@@ -162,6 +162,7 @@ def get_tenant_statement(
 	filters: dict | None = None,
 	page: int | None = None,
 	print_mode: bool = False,
+	sort_order: str = "asc",
 ) -> dict:
 	"""Full statement merging dues, waivers, and receipts.
 
@@ -294,6 +295,10 @@ def get_tenant_statement(
 	total_dues = round_money(sum(e["debit"] for e in entries))
 	total_receipts = round_money(sum(e["credit"] for e in entries))
 	closing_balance = round_money(total_dues - total_receipts)
+
+	# ---- Display order (running balance is always computed chronologically) ----
+	if sort_order == "desc":
+		entries.reverse()
 
 	# ---- Pagination ----
 	total_entries = len(entries)

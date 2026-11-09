@@ -359,7 +359,7 @@ def get_tenant(name):
 	from rental.rental.services.statement_service import get_tenant_statement
 
 	result["balance"] = get_tenant_balance(name)
-	result["statement"] = get_tenant_statement(name, page=1)
+	result["statement"] = get_tenant_statement(name, page=1, sort_order="desc")
 
 	return result
 
@@ -490,6 +490,7 @@ def get_tenant_statement_api(
 	due_type=None,
 	page=1,
 	print=0,
+	sort_order="asc",
 ):
 	"""Get tenant statement with dues, waivers, and receipts.
 
@@ -517,4 +518,7 @@ def get_tenant_statement_api(
 	if due_type:
 		filters["due_type"] = due_type
 
-	return get_tenant_statement(name, filters=filters, page=int(page), print_mode=bool(int(print)))
+	sort_order = "desc" if sort_order == "desc" else "asc"
+	return get_tenant_statement(
+		name, filters=filters, page=int(page), print_mode=bool(int(print)), sort_order=sort_order
+	)
